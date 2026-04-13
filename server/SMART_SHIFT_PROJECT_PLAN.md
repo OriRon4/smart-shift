@@ -68,21 +68,21 @@ db-mysql
 
 ### Project Setup
 
-- [ ] Create the base project folders:
+- [x] Create the base project folders:
   - `backend-node.js`
   - `frontend-angular`
   - `db-mysql`
-- [ ] Move the current backend code out of the single `index.js` file into the new backend structure
-- [ ] Add a clear README for the project architecture and setup steps
+- [x] Move the current backend code out of the single `index.js` file into the new backend structure
+- [x] Add a clear README for the project architecture and setup steps
 
 ### Backend Refactor
 
-- [ ] Split Express server setup into dedicated modules
-- [ ] Create separate folders for routes, controllers, services, and database configuration
-- [ ] Move MySQL connection logic into its own reusable module
-- [ ] Separate scheduling logic from HTTP route handling
-- [ ] Add environment variable support for database credentials and server configuration
-- [ ] Add basic error handling middleware
+- [x] Split Express server setup into dedicated modules
+- [x] Create separate folders for routes, controllers, services, and database configuration
+- [x] Move MySQL connection logic into its own reusable module
+- [x] Separate scheduling logic from HTTP route handling
+- [x] Add environment variable support for database credentials and server configuration
+- [x] Add basic error handling middleware
 
 ### Scheduling Algorithm
 
