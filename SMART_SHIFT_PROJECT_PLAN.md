@@ -74,7 +74,12 @@ The existing database structure stores employees, shifts, availability requests,
 - Algorithm (Partial):
   - Worker strength calculation:
     - `strength = 0.4 * professionalism + 0.4 * responsibility + 0.2 * pressure_handling`
-  - Initial assignment currently based only on strength among workers who are available for the shift
+  - A first working scheduling algorithm now exists with:
+    - availability filtering
+    - shift priority ordering
+    - basic fairness scoring
+    - shift validity checks
+    - a simple improvement loop
 
 - Basic UI:
   - HTML page fetching and displaying schedule
@@ -135,24 +140,24 @@ db-mysql
 
 ### Scheduling Algorithm
 
-- [ ] Define the exact worker attributes used in the first version
-- [ ] Document the worker strength formula and its weights
-- [ ] Add a penalty rule for workers with very low responsibility or reliability
-- [ ] Ensure only available workers can be assigned to a shift
-- [ ] Prevent duplicate assignment of the same worker to the same shift
-- [ ] Define the minimum required number of waiters per shift
-- [ ] Add support for manager-defined required waiters per shift
-- [ ] Process shifts in priority order (harder shifts first)
-- [ ] Allow workers to be assigned to both morning and evening shifts in the same day
-- [ ] Implement initial weekly schedule generation based on worker strength
-- [ ] Define what makes a shift valid before scoring it
-- [ ] Define a basic fairness rule for one week only
-- [ ] Keep the first fairness version simple: compare number of assigned shifts to number of requested shifts
-- [ ] Create a schedule scoring function based on shift coverage, worker strength, and fairness
-- [ ] Improve fairness by considering how many shifts each worker requested compared to how many shifts they were assigned
-- [ ] Improve overall shift quality by avoiding weak shifts and distributing worker strength more reasonably across the week
-- [ ] Add an improvement loop that adjusts weak schedules without breaking validity
-- [ ] Add an improvement phase that adjusts weak schedules
+- [x] Define the exact worker attributes used in the first version
+- [x] Document the worker strength formula and its weights
+- [x] Add a penalty rule for workers with very low responsibility or reliability
+- [x] Ensure only available workers can be assigned to a shift
+- [x] Prevent duplicate assignment of the same worker to the same shift
+- [x] Define the minimum required number of waiters per shift
+- [x] Add support for manager-defined required waiters per shift
+- [x] Process shifts in priority order (harder shifts first)
+- [x] Allow workers to be assigned to both morning and evening shifts in the same day
+- [x] Implement initial weekly schedule generation based on worker strength
+- [x] Define what makes a shift valid before scoring it
+- [x] Define a basic fairness rule for one week only
+- [x] Keep the first fairness version simple: compare number of assigned shifts to number of requested shifts
+- [x] Create a schedule scoring function based on shift coverage, worker strength, and fairness
+- [x] Improve fairness by considering how many shifts each worker requested compared to how many shifts they were assigned
+- [x] Improve overall shift quality by avoiding weak shifts and distributing worker strength more reasonably across the week
+- [x] Add an improvement loop that adjusts weak schedules without breaking validity
+- [x] Add an improvement phase that adjusts weak schedules
 
 ### Database Work
 

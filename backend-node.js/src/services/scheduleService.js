@@ -1,5 +1,8 @@
 const { createDbConnection } = require("../config/db");
-const { calculateWorkerStrength } = require("../utils/strength");
+const {
+  buildPersistedAssignments,
+  generateScheduleDraft,
+} = require("./schedulingAlgorithm");
 
 async function getEmployeesForTest() {
   let conn;
@@ -37,15 +40,6 @@ async function getSchedulingData() {
   }
 }
 
-function getAvailableEmployeesForShift(enrichedEmployees, requests, shiftId) {
-  return enrichedEmployees.filter((employee) =>
-    requests.some(
-      (request) =>
-        request.employee_id === employee.id && request.shift_id === shiftId
-    )
-  );
-}
-
 async function generateInitialSchedule() {
   let conn;
 
@@ -61,45 +55,34 @@ async function generateInitialSchedule() {
     const [requests] = await conn.query(
       "SELECT * FROM shift_requests WHERE can_work = TRUE"
     );
+    const scheduleDraft = generateScheduleDraft(employees, shifts, requests);
 
-    const [scheduleResult] = await conn.query(`
+    if (!scheduleDraft.weekStartDate) {
+      throw new Error("No shifts found for schedule generation");
+    }
+
+    const [scheduleResult] = await conn.query(
+      `
       INSERT INTO weekly_schedules (week_start_date, created_by, status)
-      VALUES (CURDATE(), 'system', 'draft')
-    `);
+      VALUES (?, 'system', 'draft')
+      ON DUPLICATE KEY UPDATE
+        id = LAST_INSERT_ID(id),
+        created_by = VALUES(created_by),
+        status = VALUES(status)
+      `,
+      [scheduleDraft.weekStartDate]
+    );
 
     const scheduleId = scheduleResult.insertId;
-    const enrichedEmployees = employees.map((employee) => ({
-      ...employee,
-      strength: calculateWorkerStrength(employee),
-      assignedCount: 0,
-    }));
-    const assignments = [];
+    const assignments = buildPersistedAssignments(
+      scheduleDraft.assignmentsByShift,
+      scheduleDraft.employeesById,
+      scheduleId
+    );
 
-    for (const shift of shifts) {
-      const availableEmployees = getAvailableEmployeesForShift(
-        enrichedEmployees,
-        requests,
-        shift.id
-      );
-
-      availableEmployees.sort((a, b) => b.strength - a.strength);
-
-      const selectedEmployees = availableEmployees.slice(
-        0,
-        shift.required_waiters
-      );
-
-      for (const employee of selectedEmployees) {
-        employee.assignedCount += 1;
-
-        assignments.push([
-          scheduleId,
-          shift.id,
-          employee.id,
-          employee.strength,
-        ]);
-      }
-    }
+    await conn.query("DELETE FROM schedule_assignments WHERE schedule_id = ?", [
+      scheduleId,
+    ]);
 
     if (assignments.length > 0) {
       await conn.query(
@@ -113,13 +96,16 @@ async function generateInitialSchedule() {
     }
 
     return {
-      message: "Initial schedule created",
+      message: "Schedule generated",
       scheduleId,
-      assignments: assignments.length,
-      debugAssignedCounts: enrichedEmployees.map((employee) => ({
-        name: employee.full_name,
-        assigned: employee.assignedCount,
-      })),
+      weekStartDate: scheduleDraft.weekStartDate,
+      assignmentsCreated: assignments.length,
+      improvementPasses: scheduleDraft.improvementPasses,
+      summary: scheduleDraft.evaluation.summary,
+      scoreBreakdown: scheduleDraft.evaluation.scoreBreakdown,
+      totalScore: scheduleDraft.evaluation.totalScore,
+      employeeStats: scheduleDraft.employeeStats,
+      shifts: scheduleDraft.evaluation.shiftSummaries,
     };
   } finally {
     if (conn) {
