@@ -14,7 +14,7 @@ async function fetchSchedulingData(req, res, next) {
 
 async function generateSchedule(req, res, next) {
   try {
-    const result = await generateInitialSchedule();
+    const result = await generateInitialSchedule(req.body || {});
     res.json(result);
   } catch (error) {
     next(error);
