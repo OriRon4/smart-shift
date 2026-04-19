@@ -12,12 +12,11 @@ db-mysql/
 
 ## Current Setup Status
 
-- `backend-node.js` contains the modular Node.js backend
+- `backend-node.js` contains the new modular Node.js backend scaffold
 - `frontend-angular` is reserved for the Angular client
-- `db-mysql` contains the database schema and seed files
+- `db-mysql` is reserved for database schema and seed files
 
 ## Notes
 
-- The original root-level `index.js` is still present as a legacy entry file.
+- The original root-level `index.js` is still present as a legacy file while the backend migration is being completed.
 - The new backend entry point is `backend-node.js/src/server.js`.
-- Schedule generation is week-based and expects `weekStartDate` in `POST /generate-schedule`.

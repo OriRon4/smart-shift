@@ -2,267 +2,223 @@
 
 ## Overview
 
-Smart-Shift is a restaurant shift scheduling system for generating a weekly waiter schedule based on:
+Smart-Shift is a restaurant shift scheduling system designed to automatically generate a weekly waiter schedule based on employee availability, manager-defined worker attributes, and shift coverage requirements.
 
-- worker availability
-- manager-defined worker attributes
-- manager-defined shift coverage requirements
+This project is a final software engineering project and must demonstrate:
+- Clear architecture
+- Algorithmic thinking
+- Clean and maintainable code
+- Incremental development
 
-The first version is intentionally narrow. Its goal is to produce a valid, explainable, demo-ready weekly schedule with a clear heuristic algorithm, clean backend structure, and room for future improvement.
-
----
-
-## V1 Scope
-
-The current version focuses on one generated schedule for one selected week.
-
-In scope for V1:
-
-- waiters only
-- one selected week per schedule run
-- explicit availability per shift
-- manager-defined worker attributes
-- manager-defined required waiters per shift
-- heuristic scheduling with a simple improvement loop
-- saved generated schedules in MySQL
-
-Out of scope for V1:
-
-- historical balancing across previous weeks
-- automatic worker score updates
-- machine learning
-- dynamic staffing prediction
-- advanced labor rules such as max weekly hours or rest-time constraints
+The first version of Smart-Shift focuses on producing a valid and explainable schedule, not on full real-world automation.
 
 ---
 
-## Final V1 Scheduling Rules
+## Core Concept
 
-### Worker eligibility
+The system generates a weekly schedule using a heuristic scheduling algorithm that prioritizes valid assignment, shift strength, and basic fairness.
 
-- Only `employees` with `is_active = TRUE` and `role = 'waiter'` are eligible.
-- A worker may be assigned to a shift only if there is an explicit `shift_requests.can_work = TRUE` record for that exact shift.
-- No request record means the worker is treated as unavailable for that shift.
-- A worker may be assigned to both morning and evening shifts on the same day.
-- V1 does not enforce a hard maximum number of shifts per worker per week.
-
-### Scheduling window
-
-- Schedule generation runs for one selected week only.
-- The API accepts a `weekStartDate` input.
-- The backend normalizes that date to the Monday of the selected week.
-- Only shifts and availability requests inside that one week are used during generation.
-
-### Worker strength
-
-Base worker strength:
-
-`strength = 0.4 * professionalism + 0.4 * responsibility + 0.2 * pressure_handling`
-
-Penalty rule:
-
-- If `responsibility <= 3`, subtract `1.5` from the worker's strength.
-- Adjusted strength cannot go below `0`.
-
-Notes:
-
-- `potential` exists in the schema but is not used in the V1 scheduling score.
-- Historical performance is not used in V1.
-
-### Shift priority order
-
-Shifts are processed in this order:
-
-1. Higher shortage risk first
-2. Higher `required_waiters` first
-3. Evening before morning
-4. Earlier date first
-
-Shortage risk is based on:
-
-`max(0, required_waiters - available_workers_for_shift)`
-
-### Initial assignment rule
-
-For each shift:
-
-1. Build the list of eligible workers for that shift
-2. Sort workers by:
-   - higher adjusted strength
-   - fewer already assigned shifts
-   - higher number of requested shifts
-   - lower employee id as deterministic tie-breaker
-3. Assign up to `required_waiters`
-
-If not enough eligible workers exist, the shift remains partially uncovered. V1 reports the shortage instead of assigning unavailable workers.
-
-### Validity and scoring
-
-A shift is considered fully covered when:
-
-- `assignedCount === requiredWaiters`
-
-A shift is considered valid when:
-
-- it is fully covered
-- no employee appears more than once in the same shift
-
-The schedule score is:
-
-- `45%` coverage score
-- `25%` validity score
-- `20%` shift strength score
-- `10%` fairness score
-
-Fairness in V1 is calculated only across workers who requested at least one shift.
-
-- The algorithm compares assigned shifts to requested shifts using a proportional fulfillment ratio.
-- This keeps fairness simple while still rewarding balanced distribution relative to availability.
-
-### Improvement phase
-
-After the initial schedule is built:
-
-- the algorithm performs up to `3` improvement passes
-- each pass tries worker swaps inside shifts
-- a change is kept only if the total schedule score improves
-- no improvement step may introduce duplicate assignments inside a shift
+1. Calculate worker strength from manager-defined attributes
+2. Select only workers who are available for each shift
+3. Build an initial schedule by assigning the strongest valid workers first
+4. Check that each shift meets minimum worker coverage
+5. Evaluate schedule quality using shift strength and assignment fairness
+6. Improve the schedule by replacing assignments when a better valid option exists
 
 ---
 
-## Current Implementation Status
+## Scope Of Current Version
+
+The current version focuses on a single weekly schedule for waiters only.
+
+In this version:
+- Worker attributes are entered manually by the manager
+- The schedule is generated for one week at a time
+- The algorithm uses availability, worker strength, and basic fairness
+- Historical schedule data is not yet part of the first scheduling decision
+- Automatic performance updates and machine learning enhancements will be added in later stages
+
+---
+
+## First Version Scheduling Assumptions
+
+For the first version:
+- The manager defines worker attributes manually
+- The schedule is generated for one week only
+- Historical balancing across previous weeks is postponed
+- Automatic updates to worker scores are postponed
+- Shift requirements are defined manually before schedule generation
+- Machine learning is not part of the first scheduling implementation
+- Workers may be assigned to both morning and evening shifts on the same day
+
+---
+
+## Current State (IMPORTANT)
 
 Already implemented:
 
-- modular backend under `backend-node.js`
-- MySQL schema and seed scripts under `db-mysql`
-- worker strength calculation and low-responsibility penalty
-- shift priority ordering
-- initial heuristic assignment generation
-- schedule evaluation and scoring
-- simple improvement loop
-- schedule persistence into `weekly_schedules` and `schedule_assignments`
-- API support for generating a schedule for one selected week
-- waiter-only filtering for generation
+- MySQL Database:
+  - employees
+  - shifts
+  - shift_requests
+  - weekly_schedules
+  - schedule_assignments
 
-Current backend behavior:
+Important note:
+The existing database structure stores employees, shifts, availability requests, weekly schedules, and final assignments, but the first algorithm version will use manager-entered worker attributes as the main input for decision making.
 
-- `POST /generate-schedule` requires `weekStartDate` in the request body
-- the selected week is normalized to Monday-to-Sunday
-- only active waiters are considered during schedule generation
-- uncovered shifts are returned in the response instead of being silently forced full
-- the response includes:
-  - score breakdown
-  - per-shift summaries
-  - employee assignment statistics
-  - number of improvement passes
+- Backend:
+  - Node.js + Express
+  - Single file implementation (`index.js`)
 
-Important repo note:
+- Algorithm (Partial):
+  - Worker strength calculation:
+    - `strength = 0.4 * professionalism + 0.4 * responsibility + 0.2 * pressure_handling`
+  - A first working scheduling algorithm now exists with:
+    - availability filtering
+    - shift priority ordering
+    - basic fairness scoring
+    - shift validity checks
+    - a simple improvement loop
 
-- the root `index.js` still exists as a legacy entry file
-- the real backend entry point is `backend-node.js/src/server.js`
+- Basic UI:
+  - HTML page fetching and displaying schedule
 
----
-
-## Database Status
-
-Implemented tables:
-
-- `employees`
-- `shifts`
-- `shift_requests`
-- `weekly_schedules`
-- `schedule_assignments`
-
-Schema support already exists for:
-
-- `professionalism`
-- `responsibility`
-- `pressure_handling`
-- `potential`
-- `required_waiters`
-
-Current schema direction:
-
-- worker attributes are stored directly in `employees`
-- required coverage is stored directly in `shifts`
-- final generated assignments are stored in `schedule_assignments`
+Current development focus:
+- Complete a working schedule generation algorithm for one weekly schedule
+- Keep worker attributes manager-defined in the first version
+- Postpone automatic worker scoring updates and historical balancing to later stages
 
 ---
 
-## Remaining Work
+## Project Goals
+
+### 1. Build a working first version for one weekly schedule (High Priority)
+
+### 2. Define the first scheduling rules clearly
+
+The first version of the project must explicitly define:
+- How worker strength is calculated
+- How shift coverage is checked
+- How available workers are filtered
+- How fairness is measured for one week
+- How a valid schedule is evaluated before improvement
+
+### 3. Refactor Backend (Secondary Priority)
+
+Convert the backend into a clean, modular structure.
+
+#### Required Structure
+
+```text
+backend-node
+frontend-angular
+db-mysql
+```
+
+---
+
+## TODO List
+
+### Project Setup
+
+- [x] Create the base project folders:
+  - `backend-node.js`
+  - `frontend-angular`
+  - `db-mysql`
+- [x] Move the current backend code out of the single `index.js` file into the new backend structure
+- [x] Add a clear README for the project architecture and setup steps
+
+### Backend Refactor
+
+- [x] Split Express server setup into dedicated modules
+- [x] Create separate folders for routes, controllers, services, and database configuration
+- [x] Move MySQL connection logic into its own reusable module
+- [x] Separate scheduling logic from HTTP route handling
+- [x] Add environment variable support for database credentials and server configuration
+- [x] Add basic error handling middleware
+
+### Scheduling Algorithm
+
+- [x] Define the exact worker attributes used in the first version
+- [x] Document the worker strength formula and its weights
+- [x] Add a penalty rule for workers with very low responsibility or reliability
+- [x] Ensure only available workers can be assigned to a shift
+- [x] Prevent duplicate assignment of the same worker to the same shift
+- [x] Define the minimum required number of waiters per shift
+- [x] Add support for manager-defined required waiters per shift
+- [x] Process shifts in priority order (harder shifts first)
+- [x] Allow workers to be assigned to both morning and evening shifts in the same day
+- [x] Implement initial weekly schedule generation based on worker strength
+- [x] Define what makes a shift valid before scoring it
+- [x] Define a basic fairness rule for one week only
+- [x] Keep the first fairness version simple: compare number of assigned shifts to number of requested shifts
+- [x] Create a schedule scoring function based on shift coverage, worker strength, and fairness
+- [x] Improve fairness by considering how many shifts each worker requested compared to how many shifts they were assigned
+- [x] Improve overall shift quality by avoiding weak shifts and distributing worker strength more reasonably across the week
+- [x] Add an improvement loop that adjusts weak schedules without breaking validity
+- [x] Add an improvement phase that adjusts weak schedules
+
+### Database Work
+
+- [ ] Review and document the schema for all existing tables
+- [ ] Create SQL scripts for schema creation and seed data
+- [ ] Add sample employee and shift request data for testing
+- [ ] Ensure generated schedules are saved correctly into `weekly_schedules` and `schedule_assignments`
+- [ ] Verify that employee attributes needed for strength calculation exist in the schema
+- [ ] Add fields for professionalism, responsibility, pressure_handling, and potential if they do not already exist
+- [ ] Verify that each shift record can store the number of required waiters
+- [ ] Verify whether worker attributes are stored directly in the employees table or in a separate related table
 
 ### Frontend
 
-- [ ] Create the Angular frontend inside `frontend-angular`
-- [ ] Build a weekly schedule view
-- [ ] Add a week selector that sends `weekStartDate` to schedule generation
-- [ ] Build forms for worker availability input
-- [ ] Build forms for manager-defined worker attributes
-- [ ] Build forms for weekly shift coverage requirements
-- [ ] Connect frontend pages to backend API endpoints
+- [ ] Create the Angular frontend project inside `frontend-angular`
+- [ ] Build a page to display the generated weekly schedule
+- [ ] Add a form for employee shift requests or availability input
+- [ ] Build a page to manage employee attributes manually in the first version
+- [ ] Build a page to define weekly shift requirements before generating the schedule
+- [ ] Connect the frontend to backend API endpoints
+- [ ] Improve the UI so it is clear enough for project demonstration
 
-### API
+### API Endpoints
 
-- [x] Generate a weekly schedule
-- [ ] Fetch employees
-- [ ] Fetch shifts
-- [ ] Submit or update shift requests
-- [ ] Fetch saved schedules
-- [ ] Update worker attributes
-- [ ] Update required waiters per shift
+- [ ] Create an endpoint to fetch employees
+- [ ] Create an endpoint to fetch shifts
+- [ ] Create an endpoint to submit shift requests
+- [ ] Create an endpoint to generate a weekly schedule
+- [ ] Create an endpoint to fetch saved schedules
+- [ ] Create an endpoint to update worker attributes
+- [ ] Create an endpoint to fetch worker attributes for schedule generation
+- [ ] Create an endpoint to set or update required waiters per shift
 
 ### Testing And Quality
 
-- [x] Add initial unit tests for worker strength calculation
-- [x] Add initial unit tests for core scheduling behavior
-- [ ] Add tests for schedule persistence
+- [ ] Add unit tests for worker strength calculation
+- [ ] Add unit tests for schedule quality evaluation
+- [ ] Add tests for fairness and balance improvements
 - [ ] Add API tests for schedule generation endpoints
-- [ ] Add edge-case tests for invalid week input
-- [ ] Add edge-case tests for very low worker availability
-- [ ] Add tests for fairness behavior across uneven availability
+- [ ] Add tests for edge cases such as not enough workers or conflicting availability
+- [ ] Add tests to verify that unavailable workers are never assigned
+- [ ] Add tests to verify that every shift meets minimum coverage when possible
+- [ ] Add tests for penalty behavior when a worker has a very low critical attribute
+- [ ] Add tests to verify that the improvement step never breaks schedule validity
 
-### Documentation And Demo Prep
+### Final Project Preparation
 
-- [ ] Add a step-by-step algorithm explanation for presentation
-- [ ] Document the API request and response shape
-- [ ] Add a simple system architecture diagram
-- [ ] Prepare demo data for more than one week
-- [ ] Document postponed features clearly for the final presentation
-
----
-
-## Suggested API Contract For V1
-
-### Generate Schedule
-
-`POST /generate-schedule`
-
-Request body:
-
-```json
-{
-  "weekStartDate": "2026-04-13"
-}
-```
-
-Response includes:
-
-- normalized `weekStartDate`
-- schedule summary
-- score breakdown
-- employee assignment stats
-- shift-level coverage and validity details
+- [ ] Prepare a step-by-step explanation of the scheduling algorithm
+- [ ] Document the system architecture with a simple diagram
+- [ ] Prepare demo data for presentation
+- [ ] Verify the project shows incremental development and clean code practices
+- [ ] Prepare a clear explanation of the first-version scope and what is intentionally postponed
+- [ ] Prepare a short explanation of future extensions: historical balancing, automatic scoring updates, and ML-based load prediction
 
 ---
 
 ## Future Extensions
 
 Later versions may include:
-
-- historical balancing across multiple weeks
-- automatic worker score updates based on observed performance
-- use of `potential` as part of a more advanced assignment strategy
-- dynamic estimation of required waiters per shift
-- stronger fairness constraints
-- labor-rule constraints such as rest time or weekly workload caps
+- Historical balancing across multiple weeks
+- Automatic worker score updates based on shift performance data
+- Load prediction using machine learning
+- Dynamic calculation of required waiters per shift
+- More advanced fairness logic

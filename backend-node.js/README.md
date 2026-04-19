@@ -17,12 +17,6 @@ src/
 
 - Main server file: `src/server.js`
 
-## Current Scheduling API
+## Migration Note
 
-- `POST /generate-schedule` expects a JSON body with `weekStartDate`
-- schedule generation filters to active waiters only
-- generation runs on one normalized Monday-to-Sunday week at a time
-
-## Legacy Note
-
-The original root-level `index.js` remains in the repo as a compatibility entry file.
+The backend logic was moved here from the original single-file implementation to create a cleaner structure for incremental development.
