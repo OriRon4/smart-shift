@@ -418,7 +418,7 @@ function buildEmployeeStats(employees) {
     });
 }
 
-function generateScheduleDraft(employees, shifts, requests) {
+function generateScheduleDraft(employees, shifts, requests, options = {}) {
   const { requestLookup, requestedShiftCounts } = buildRequestLookup(requests);
   const enrichedEmployees = enrichEmployees(employees, requestedShiftCounts);
   const prioritizedShifts = sortShiftsByPriority(shifts, requestLookup);
@@ -440,7 +440,10 @@ function generateScheduleDraft(employees, shifts, requests) {
   );
 
   return {
-    weekStartDate: getWeekStartDate(shifts),
+    weekStartDate:
+      shifts.length === 0
+        ? null
+        : options.weekStartDate || getWeekStartDate(shifts),
     assignmentsByShift,
     employeesById,
     evaluation: orderedEvaluation,
