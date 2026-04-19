@@ -5,10 +5,12 @@ const SHIFT_TYPE_PRIORITY = {
   morning: 1,
 };
 
+// Keep numeric scores stable and easy to read in API responses.
 function roundToTwoDecimals(value) {
   return Number(value.toFixed(2));
 }
 
+// Lower a worker's usable strength when a critical attribute is too weak.
 function applyCriticalAttributePenalty(employee, baseStrength) {
   let adjustedStrength = baseStrength;
   const penalties = [];
@@ -25,6 +27,7 @@ function applyCriticalAttributePenalty(employee, baseStrength) {
   };
 }
 
+// Turn raw availability rows into fast lookup structures for scheduling decisions.
 function buildRequestLookup(requests) {
   const requestLookup = new Map();
   const requestedShiftCounts = new Map();
@@ -47,6 +50,7 @@ function buildRequestLookup(requests) {
   };
 }
 
+// Attach scoring and tracking fields to each employee before scheduling begins.
 function enrichEmployees(employees, requestedShiftCounts) {
   return employees.map((employee) => {
     const baseStrength = calculateWorkerStrength(employee);
@@ -66,6 +70,7 @@ function enrichEmployees(employees, requestedShiftCounts) {
   });
 }
 
+// Prioritize harder-to-cover shifts first so limited staff is used where it matters most.
 function sortShiftsByPriority(shifts, requestLookup) {
   return [...shifts].sort((leftShift, rightShift) => {
     const leftAvailableCount = requestLookup.get(leftShift.id)?.size || 0;
@@ -102,6 +107,7 @@ function sortShiftsByPriority(shifts, requestLookup) {
   });
 }
 
+// Rank available employees so strong workers fill shifts before fairness tuning starts.
 function sortEmployeesForShift(leftEmployee, rightEmployee) {
   if (rightEmployee.adjustedStrength !== leftEmployee.adjustedStrength) {
     return rightEmployee.adjustedStrength - leftEmployee.adjustedStrength;
@@ -118,6 +124,7 @@ function sortEmployeesForShift(leftEmployee, rightEmployee) {
   return leftEmployee.id - rightEmployee.id;
 }
 
+// Build the first draft by taking the strongest valid available workers per shift.
 function buildInitialAssignments(shifts, employees, requestLookup) {
   const assignmentsByShift = new Map();
   const employeesById = new Map(
@@ -147,6 +154,7 @@ function buildInitialAssignments(shifts, employees, requestLookup) {
   };
 }
 
+// Score how fairly the week fulfills each worker's requested shift count.
 function calculateFairnessScore(employees) {
   const requestedEmployees = employees.filter(
     (employee) => employee.requestedCount > 0
@@ -182,6 +190,7 @@ function calculateFairnessScore(employees) {
   return roundToTwoDecimals(averageScore);
 }
 
+// Summarize each shift so coverage gaps and strength are visible in the response.
 function buildShiftSummaries(shifts, assignmentsByShift, employeesById) {
   return shifts.map((shift) => {
     const assignmentIds = assignmentsByShift.get(shift.id) || [];
@@ -220,6 +229,7 @@ function buildShiftSummaries(shifts, assignmentsByShift, employeesById) {
   });
 }
 
+// Combine coverage, validity, strength, and fairness into one schedule score.
 function evaluateSchedule(shifts, employees, assignmentsByShift) {
   const employeesById = new Map(
     employees.map((employee) => [employee.id, employee])
@@ -288,6 +298,7 @@ function evaluateSchedule(shifts, employees, assignmentsByShift) {
   };
 }
 
+// Keep employee assignment counts in sync when the improvement loop swaps workers.
 function updateEmployeeAssignmentCounts(
   employeesById,
   removedEmployeeId,
@@ -300,6 +311,7 @@ function updateEmployeeAssignmentCounts(
   addedEmployee.assignedCount += 1;
 }
 
+// Try simple worker swaps that improve the total schedule score without breaking validity.
 function improveSchedule(shifts, employeesById, assignmentsByShift, requestLookup) {
   let bestEvaluation = evaluateSchedule(
     shifts,
@@ -369,6 +381,7 @@ function improveSchedule(shifts, employeesById, assignmentsByShift, requestLooku
   };
 }
 
+// Derive the saved schedule's week identifier from the earliest shift date.
 function getWeekStartDate(shifts) {
   if (shifts.length === 0) {
     return null;
@@ -379,6 +392,7 @@ function getWeekStartDate(shifts) {
     .sort((leftDate, rightDate) => new Date(leftDate) - new Date(rightDate))[0];
 }
 
+// Flatten the in-memory assignments into rows ready for bulk MySQL insertion.
 function buildPersistedAssignments(assignmentsByShift, employeesById, scheduleId) {
   const rows = [];
 
@@ -398,6 +412,7 @@ function buildPersistedAssignments(assignmentsByShift, employeesById, scheduleId
   return rows;
 }
 
+// Build a readable employee summary so the API shows who got what this week.
 function buildEmployeeStats(employees) {
   return employees
     .map((employee) => ({
@@ -418,6 +433,7 @@ function buildEmployeeStats(employees) {
     });
 }
 
+// Run the full draft workflow from raw inputs to a scored weekly schedule result.
 function generateScheduleDraft(employees, shifts, requests) {
   const { requestLookup, requestedShiftCounts } = buildRequestLookup(requests);
   const enrichedEmployees = enrichEmployees(employees, requestedShiftCounts);

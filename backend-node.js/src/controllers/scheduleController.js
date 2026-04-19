@@ -3,6 +3,7 @@ const {
   getSchedulingData,
 } = require("../services/scheduleService");
 
+// Return the current database inputs that the scheduler will use.
 async function fetchSchedulingData(req, res, next) {
   try {
     const data = await getSchedulingData();
@@ -12,6 +13,7 @@ async function fetchSchedulingData(req, res, next) {
   }
 }
 
+// Generate and persist the current week's schedule from database data.
 async function generateSchedule(req, res, next) {
   try {
     const result = await generateInitialSchedule();

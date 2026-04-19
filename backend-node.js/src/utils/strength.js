@@ -1,3 +1,4 @@
+// Convert manager-entered worker attributes into a single comparable strength score.
 function calculateWorkerStrength(employee) {
   const professionalism = Number(employee.professionalism || 0);
   const responsibility = Number(employee.responsibility || 0);
