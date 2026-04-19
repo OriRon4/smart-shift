@@ -3,17 +3,6 @@ const {
   buildPersistedAssignments,
   generateScheduleDraft,
 } = require("./schedulingAlgorithm");
-const { buildWeekWindow, normalizeToWeekStart } = require("../utils/week");
-
-function createHttpError(statusCode, message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
-
-function collectAvailableWeekStarts(shifts) {
-  return [...new Set(shifts.map((shift) => normalizeToWeekStart(shift.shift_date)))];
-}
 
 async function getEmployeesForTest() {
   let conn;
@@ -35,21 +24,14 @@ async function getSchedulingData() {
   try {
     conn = await createDbConnection();
 
-    const [employees] = await conn.query(
-      "SELECT * FROM employees WHERE is_active = TRUE AND role = 'waiter'"
-    );
-    const [shifts] = await conn.query(
-      "SELECT * FROM shifts ORDER BY shift_date, shift_type"
-    );
-    const [shiftRequests] = await conn.query(
-      "SELECT * FROM shift_requests WHERE can_work = TRUE"
-    );
+    const [employees] = await conn.query("SELECT * FROM employees");
+    const [shifts] = await conn.query("SELECT * FROM shifts");
+    const [shiftRequests] = await conn.query("SELECT * FROM shift_requests");
 
     return {
       employees,
       shifts,
       shiftRequests,
-      availableWeekStarts: collectAvailableWeekStarts(shifts),
     };
   } finally {
     if (conn) {
@@ -58,63 +40,26 @@ async function getSchedulingData() {
   }
 }
 
-async function generateInitialSchedule(options = {}) {
+async function generateInitialSchedule() {
   let conn;
 
   try {
     conn = await createDbConnection();
-    const requestedWeekStartDate = options.weekStartDate;
-    let weekWindow;
-
-    if (!requestedWeekStartDate) {
-      throw createHttpError(
-        400,
-        "weekStartDate is required in the request body (YYYY-MM-DD)"
-      );
-    }
-
-    try {
-      weekWindow = buildWeekWindow(requestedWeekStartDate);
-    } catch (error) {
-      throw createHttpError(400, error.message);
-    }
-
-    const { weekStartDate, weekEndExclusive } = weekWindow;
 
     const [employees] = await conn.query(
-      "SELECT * FROM employees WHERE is_active = TRUE AND role = 'waiter'"
+      "SELECT * FROM employees WHERE is_active = TRUE"
     );
     const [shifts] = await conn.query(
-      `
-      SELECT *
-      FROM shifts
-      WHERE shift_date >= ? AND shift_date < ?
-      ORDER BY shift_date, shift_type
-      `,
-      [weekStartDate, weekEndExclusive]
+      "SELECT * FROM shifts ORDER BY shift_date, shift_type"
     );
     const [requests] = await conn.query(
-      `
-      SELECT sr.*
-      FROM shift_requests sr
-      INNER JOIN shifts s ON s.id = sr.shift_id
-      WHERE sr.can_work = TRUE
-        AND s.shift_date >= ?
-        AND s.shift_date < ?
-      `,
-      [weekStartDate, weekEndExclusive]
+      "SELECT * FROM shift_requests WHERE can_work = TRUE"
     );
+    const scheduleDraft = generateScheduleDraft(employees, shifts, requests);
 
-    if (shifts.length === 0) {
-      throw createHttpError(
-        404,
-        `No shifts found for the selected week starting ${weekStartDate}`
-      );
+    if (!scheduleDraft.weekStartDate) {
+      throw new Error("No shifts found for schedule generation");
     }
-
-    const scheduleDraft = generateScheduleDraft(employees, shifts, requests, {
-      weekStartDate,
-    });
 
     const [scheduleResult] = await conn.query(
       `
@@ -123,9 +68,9 @@ async function generateInitialSchedule(options = {}) {
       ON DUPLICATE KEY UPDATE
         id = LAST_INSERT_ID(id),
         created_by = VALUES(created_by),
-      status = VALUES(status)
+        status = VALUES(status)
       `,
-      [weekStartDate]
+      [scheduleDraft.weekStartDate]
     );
 
     const scheduleId = scheduleResult.insertId;
@@ -153,8 +98,7 @@ async function generateInitialSchedule(options = {}) {
     return {
       message: "Schedule generated",
       scheduleId,
-      weekStartDate,
-      requestedWeekStartDate,
+      weekStartDate: scheduleDraft.weekStartDate,
       assignmentsCreated: assignments.length,
       improvementPasses: scheduleDraft.improvementPasses,
       summary: scheduleDraft.evaluation.summary,
