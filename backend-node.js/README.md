@@ -1,22 +1,30 @@
 # Smart-Shift Backend
 
-This folder contains the modular Node.js and Express backend for Smart-Shift.
+This folder is now a backend skeleton only for the V1 rebuild.
 
-## Structure
+There is intentionally no Node.js or Express implementation yet.
+
+## Planned Structure
 
 ```text
 src/
+  algorithms/
   config/
   controllers/
+  repositories/
   routes/
   services/
   utils/
 ```
 
-## Entry Point
+## Build Intent
 
-- Main server file: `src/server.js`
+We will add backend code step by step based on the two current source markdown files at the repo root.
 
-## Migration Note
+For V1, this backend exists mainly to support one schedule-generation flow and one schedule-display flow, while keeping a clean separation between:
 
-The backend logic was moved here from the original single-file implementation to create a cleaner structure for incremental development.
+- routes
+- controllers
+- services
+- repositories
+- scheduling algorithm logic

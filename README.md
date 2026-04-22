@@ -1,22 +1,53 @@
 # Smart-Shift
 
-Smart-Shift is a restaurant shift scheduling system that generates weekly waiter schedules based on availability and worker strength.
+Smart-Shift is currently a structure-only V1 workspace.
 
-## Project Structure
+There is intentionally no implementation code in the repository right now. We are building the project step by step from the two markdown files currently in the repo.
+
+## Current Source Of Truth
+
+- [SmartShift_Codex_Master_Prompt_V1 (1).md](C:/Users/Ori/Documents/GitHub/smart-shift/SmartShift_Codex_Master_Prompt_V1%20(1).md)
+- [SmartShift_Codex_Working_Method_Prompt (2).md](C:/Users/Ori/Documents/GitHub/smart-shift/SmartShift_Codex_Working_Method_Prompt%20(2).md)
+
+These two files now define both:
+- the Smart-Shift V1 product direction
+- how we implement it together, step by step
+
+## Structure
 
 ```text
 backend-node.js/
+  src/
+    algorithms/
+    config/
+    controllers/
+    repositories/
+    routes/
+    services/
+    utils/
 frontend-angular/
+  src/
+    app/
+      features/
+        schedule/
+          components/
+            schedule-grid/
+            week-selector/
+          models/
+          pages/
+            schedule-board/
+          services/
+    assets/
 db-mysql/
+  schema/
+  seed/
 ```
 
-## Current Setup Status
+## Working Rules
 
-- `backend-node.js` contains the new modular Node.js backend scaffold
-- `frontend-angular` is reserved for the Angular client
-- `db-mysql` is reserved for database schema and seed files
-
-## Notes
-
-- The original root-level `index.js` is still present as a legacy file while the backend migration is being completed.
-- The new backend entry point is `backend-node.js/src/server.js`.
+- No backend code yet
+- No frontend code yet
+- No SQL implementation yet
+- Only folders, docs, and placeholders until we build each piece together
+- The frontend structure is centered on the single V1 `schedule` feature
+- The backend stays ready for routing, service, repository, and algorithm layers around schedule generation

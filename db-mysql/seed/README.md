@@ -1,10 +1,11 @@
 # Seed Folder
 
-`seed.sql` contains development and demo `INSERT` statements for the current V1 scope.
+This folder is reserved for the V1 seed data once we write it together.
 
-It seeds:
-- employees
-- shifts
-- shift_requests
+The first seed pass should support:
 
-Generated schedule tables are left empty so the application can create them during schedule generation.
+- one full selected week
+- 7 days
+- 2 shifts per day
+- enough waiters
+- meaningful request patterns for demoing fairness and uncovered slots when needed

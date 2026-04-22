@@ -1,9 +1,11 @@
 # Smart-Shift Database
 
-This folder contains the MySQL database resources for Smart-Shift.
+This folder is now a database skeleton only for the V1 rebuild.
+
+There is intentionally no SQL implementation yet.
 
 ## Planned Contents
 
-- Schema creation scripts
-- Seed data for development and demos
-- Database documentation
+- schema design for the exact V1 flow
+- seed data for one full demo week
+- short documentation for setup and assumptions
