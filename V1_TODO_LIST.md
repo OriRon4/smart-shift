@@ -249,157 +249,160 @@ This is the smallest clean implementation order I recommend for V1.
 
 Each step is intentionally small so we can build and explain everything clearly.
 
-### Step 1
+Progress note:
 
-Inspect the backend and DB base you provide and map the current files, routes, schema, and seed state.
+- this checklist is a high-level progress tracker
+- actual implementation still happens in smaller approval-based units
 
-### Step 2
+- [x] Step 1
+  Inspect the current backend and DB skeleton and map the current files, routes, schema state, and seed state.
 
-Write a short backend structure note from the real base:
+- [x] Step 2
+  Write a short backend structure note from the current skeleton/base:
 
-- what already exists
-- what can stay
-- what must change for V1
+  - what already exists
+  - what can stay
+  - what must change for V1
 
-### Step 3
+- [x] Step 3
 
-Review the current DB schema against the locked V1 rules.
+  Review the current DB schema target against the locked V1 rules.
 
-### Step 4
+- [x] Step 4
 
-Define the exact schema changes needed for V1:
+  Define the exact schema changes needed for V1:
 
-- Sunday-based weekly flow assumptions
-- waiter-only active employees
-- `required_strength_score` on shifts
-- weekly schedules
-- schedule assignments
+  - Sunday-based weekly flow assumptions
+  - waiter-only active employees
+  - `required_strength_score` on shifts
+  - weekly schedules
+  - schedule assignments
 
-### Step 5
+- [x] Step 5
 
-Update or create the schema SQL for the exact V1 tables.
+  Update or create the schema SQL for the exact V1 tables.
 
-### Step 6
+- [x] Step 6
 
-Prepare one full Sunday-start demo week in seed data:
+  Prepare one full Sunday-start demo week in seed data:
 
-- 7 days
-- 2 shifts per day
-- enough waiters
-- mixed request patterns
-- mixed shift strength targets
+  - 7 days
+  - 2 shifts per day
+  - enough waiters
+  - mixed request patterns
+  - mixed shift strength targets
 
-### Step 7
+- [x] Step 7
 
-Define the backend response contract formally in code-facing notes before endpoint work starts.
+  Create a dedicated backend response contract note/file only if still needed before endpoint work starts.
 
-### Step 8
+- [x] Step 8
 
-Create the backend route/controller/service/repository skeleton for the schedule flow.
+  Create the backend route/controller/service/repository skeleton for the schedule flow.
 
-### Step 9
+- [ ] Step 9
 
-Implement the repository queries for:
+  Implement the repository queries for:
 
-- employees for one selected week
-- shifts for one selected week
-- shift requests for one selected week
+  - employees for one selected week
+  - shifts for one selected week
+  - shift requests for one selected week
 
-### Step 10
+- [ ] Step 10
 
-Implement the worker strength calculation utilities.
+  Implement the worker strength calculation utilities.
 
-### Step 11
+- [ ] Step 11
 
-Implement target shift calculation utilities.
+  Implement target shift calculation utilities.
 
-### Step 12
+- [ ] Step 12
 
-Implement forced-assignment logic for shifts where availability is less than or equal to required coverage.
+  Implement forced-assignment logic for shifts where availability is less than or equal to required coverage.
 
-### Step 13
+- [ ] Step 13
 
-Implement shift ordering logic.
+  Implement shift ordering logic.
 
-### Step 14
+- [ ] Step 14
 
-Implement candidate scoring logic with the approved `selection_score`.
+  Implement candidate scoring logic with the approved `selection_score`.
 
-### Step 15
+- [ ] Step 15
 
-Implement the main assignment flow for remaining shifts.
+  Implement the main assignment flow for remaining shifts.
 
-### Step 16
+- [ ] Step 16
 
-Implement V1 strength-target validation per shift:
+  Implement V1 strength-target validation per shift:
 
-- assigned total strength
-- `meetsStrengthTarget`
-- uncovered slots
+  - assigned total strength
+  - `meetsStrengthTarget`
+  - uncovered slots
 
-### Step 17
+- [ ] Step 17
 
-Implement the small final correction pass.
+  Implement the small final correction pass.
 
-### Step 18
+- [ ] Step 18
 
-Implement schedule persistence:
+  Implement schedule persistence:
 
-- save weekly schedule
-- save assignments
+  - save weekly schedule
+  - save assignments
 
-### Step 19
+- [ ] Step 19
 
-Implement the schedule-generation endpoint for one selected week.
+  Implement the schedule-generation endpoint for one selected week.
 
-### Step 20
+- [ ] Step 20
 
-Verify the backend response with the real DB data.
+  Verify the backend response with the real DB data.
 
-### Step 21
+- [ ] Step 21
 
-Set up the Angular app shell from the real project base.
+  Set up the Angular app shell from the current frontend skeleton.
 
-### Step 22
+- [ ] Step 22
 
-Create the `schedule` feature shell in the frontend.
+  Create the `schedule` feature shell in the frontend.
 
-### Step 23
+- [ ] Step 23
 
-Create frontend models matching the backend response contract.
+  Create frontend models matching the backend response contract.
 
-### Step 24
+- [ ] Step 24
 
-Create the frontend schedule API service.
+  Create the frontend schedule API service.
 
-### Step 25
+- [ ] Step 25
 
-Create the schedule board page shell.
+  Create the schedule board page shell.
 
-### Step 26
+- [ ] Step 26
 
-Create the week selector component.
+  Create the week selector component.
 
-### Step 27
+- [ ] Step 27
 
-Create the schedule grid component.
+  Create the schedule grid component.
 
-### Step 28
+- [ ] Step 28
 
-Connect the page to the API service and render one selected week.
+  Connect the page to the API service and render one selected week.
 
-### Step 29
+- [ ] Step 29
 
-Add simple loading, empty, and error states to the schedule screen.
+  Add simple loading, empty, and error states to the schedule screen.
 
-### Step 30
+- [ ] Step 30
 
-Run an end-to-end V1 verification pass:
+  Run an end-to-end V1 verification pass:
 
-- DB data loads
-- schedule generates
-- result saves
-- frontend displays correctly
+  - DB data loads
+  - schedule generates
+  - result saves
+  - frontend displays correctly
 
 ## 5. Approval Check Before Coding
 
