@@ -300,7 +300,7 @@ Progress note:
 
   Create the backend route/controller/service/repository skeleton for the schedule flow.
 
-- [ ] Step 9
+- [x] Step 9
 
   Implement the repository queries for:
 
