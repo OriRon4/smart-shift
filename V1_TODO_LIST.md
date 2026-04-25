@@ -308,11 +308,11 @@ Progress note:
   - shifts for one selected week
   - shift requests for one selected week
 
-- [ ] Step 10
+- [x] Step 10
 
   Implement the worker strength calculation utilities.
 
-- [ ] Step 11
+- [x] Step 11
 
   Implement target shift calculation utilities.
 
