@@ -1,4 +1,4 @@
-const { calculateStrengthScore } = require("./workerStrengthUtils");
+const { calculateStrengthScore } = require("./workerStrength");
 
 // בונה לכל משמרת סיכום בדיקה של כיסוי וכוח צוות אחרי שההשמות הסתיימו.
 function buildShiftValidations(shifts, assignments, employees) {

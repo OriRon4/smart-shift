@@ -1,14 +1,14 @@
 const {
   calculateStrengthScore,
   calculateNormalizedStrength,
-} = require("./workerStrengthUtils");
+} = require("./workerStrength");
 const {
   calculateTargetShifts,
   calculateFairnessGap,
   calculateFairnessGapScore,
-} = require("./targetShiftUtils");
-const { orderShiftsByPriority } = require("./shiftOrderingUtils");
-const { scoreShiftCandidates } = require("./candidateScoringUtils");
+} = require("./targetShift");
+const { orderShiftsByPriority } = require("./shiftOrdering");
+const { scoreShiftCandidates } = require("./candidateScoring");
 
 // סופרת כמה משמרות כל עובד ביקש באותו שבוע.
 function buildRequestedShiftCountsByEmployee(shiftRequests) {
