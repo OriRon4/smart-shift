@@ -1,5 +1,6 @@
 // מאתרת משמרות שבהן מספר העובדים שביקשו את המשמרת קטן או שווה למספר העובדים הנדרש.
 function findForcedShifts(shifts, shiftRequests) {
+  // key: shiftId -> value: employeeIds[] של העובדים שביקשו את המשמרת.
   const requestsByShiftId = new Map();
 
   // מקבצים את בקשות העובדים לפי מזהה משמרת כדי לדעת כמה עובדים זמינים לכל משמרת.

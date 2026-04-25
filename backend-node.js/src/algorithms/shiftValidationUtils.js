@@ -1,14 +1,15 @@
-const { calculateStrengthScore } = require("./workerStrength");
+const { calculateStrengthScore } = require("./workerStrengthUtils");
 
 // בונה לכל משמרת סיכום בדיקה של כיסוי וכוח צוות אחרי שההשמות הסתיימו.
-function buildShiftValidations(shifts, assignments, employees) {
+function buildShiftValidationSummaries(shifts, assignments, employees) {
   // מחשבים מראש את ציון החוזק של כל עובד כדי להשתמש בו בזמן סיכום המשמרות.
+  // key: employeeId -> value: strengthScore של העובד.
   const strengthScoreByEmployeeId = new Map(
     employees.map((employee) => [employee.id, calculateStrengthScore(employee)])
   );
+  // key: shiftId -> value: סיכום ביניים של assignedCount ו-assignedStrengthScore.
   const assignmentSummaryByShiftId = new Map();
 
-  // Summarize how many workers and how much total strength each shift received.
   // מסכמים לכל משמרת כמה עובדים שובצו ומהו סכום החוזק הכולל שלהם.
   for (const assignment of assignments) {
     const existingSummary =
@@ -44,5 +45,5 @@ function buildShiftValidations(shifts, assignments, employees) {
 }
 
 module.exports = {
-  buildShiftValidations,
+  buildShiftValidationSummaries,
 };

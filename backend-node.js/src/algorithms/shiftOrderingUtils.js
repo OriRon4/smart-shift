@@ -24,9 +24,9 @@ function calculatePriorityOrderScore(
 // מסדרת את המשמרות לפי סדר עבודה, מהכי דחופה להכי פחות דחופה.
 function orderShiftsByPriority(shifts, shiftRequests, excludedShiftIds = []) {
   const excludedShiftIdSet = new Set(excludedShiftIds);
+  // key: shiftId -> value: מספר העובדים הזמינים שביקשו את המשמרת.
   const availableWorkersByShiftId = new Map();
 
-  // Count how many requested workers are available for each shift.
   // סופרים כמה עובדים ביקשו כל משמרת כדי לדעת מה רמת הזמינות שלה.
   for (const shiftRequest of shiftRequests) {
     const currentAvailableWorkerCount =
@@ -41,7 +41,6 @@ function orderShiftsByPriority(shifts, shiftRequests, excludedShiftIds = []) {
   return shifts
     // מוציאים מהרשימה משמרות שכבר טופלו קודם, למשל משמרות כפויות.
     .filter((shift) => !excludedShiftIdSet.has(shift.id))
-    // Add the ordering values we need before sorting the shifts.
     // מוסיפים לכל משמרת את ערכי העזר הדרושים לפני פעולת המיון.
     .map((shift) => {
       const availableWorkers = availableWorkersByShiftId.get(shift.id) || 0;
@@ -62,7 +61,6 @@ function orderShiftsByPriority(shifts, shiftRequests, excludedShiftIds = []) {
         priorityOrderScore,
       };
     })
-    // Higher priority score means the shift should be handled earlier.
     // ממיינים כך שמשמרות עם ציון עדיפות גבוה יותר יטופלו קודם.
     .sort((leftShift, rightShift) => {
       if (rightShift.priorityOrderScore !== leftShift.priorityOrderScore) {

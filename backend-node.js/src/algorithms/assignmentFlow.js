@@ -1,20 +1,20 @@
 const {
   calculateStrengthScore,
   calculateNormalizedStrength,
-} = require("./workerStrength");
+} = require("./workerStrengthUtils");
 const {
   calculateTargetShifts,
   calculateFairnessGap,
   calculateFairnessGapScore,
-} = require("./targetShift");
-const { orderShiftsByPriority } = require("./shiftOrdering");
-const { scoreShiftCandidates } = require("./candidateScoring");
+} = require("./targetShiftUtils");
+const { orderShiftsByPriority } = require("./shiftOrderingUtils");
+const { scoreShiftCandidates } = require("./candidateScoringUtils");
 
 // סופרת כמה משמרות כל עובד ביקש באותו שבוע.
 function buildRequestedShiftCountsByEmployee(shiftRequests) {
+  // key: employeeId -> value: כמה משמרות העובד ביקש השבוע.
   const requestedShiftCountsByEmployee = new Map();
 
-  // Count how many shifts each employee requested this week.
   // עוברים על כל הבקשות ומגדילים את הספירה של העובד הרלוונטי.
   for (const shiftRequest of shiftRequests) {
     const currentRequestedShiftCount =
@@ -31,10 +31,10 @@ function buildRequestedShiftCountsByEmployee(shiftRequests) {
 
 // מקבצת לכל משמרת את מזהי העובדים שביקשו אותה.
 function buildRequestedEmployeeIdsByShift(shiftRequests) {
+  // key: shiftId -> value: employeeIds[] של העובדים שביקשו את המשמרת.
   const requestedEmployeeIdsByShift = new Map();
 
-  // Group requested employee IDs under each shift so we can build candidates fast.
-  // כך נוכל later לבנות רשימת מועמדים למשמרת בלי לחפש כל פעם מחדש.
+  // כך נוכל לבנות רשימת מועמדים למשמרת בלי לחפש כל פעם מחדש.
   for (const shiftRequest of shiftRequests) {
     const existingEmployeeIds =
       requestedEmployeeIdsByShift.get(shiftRequest.shift_id) || [];
@@ -48,9 +48,9 @@ function buildRequestedEmployeeIdsByShift(shiftRequests) {
 
 // סופרת כמה השמות כבר יש לכל עובד בנקודת הזמן הנוכחית.
 function buildAssignedShiftCountsByEmployee(assignments) {
+  // key: employeeId -> value: כמה השמות כבר ניתנו לעובד.
   const assignedShiftCountsByEmployee = new Map();
 
-  // Count how many shifts each employee already has from earlier assignments.
   // זה חשוב כדי לעדכן את חישובי ההוגנות בזמן ריצה.
   for (const assignment of assignments) {
     const currentAssignedShiftCount =
@@ -71,9 +71,9 @@ function buildEmployeeStateById(employees, shiftRequests, forcedAssignments) {
     buildRequestedShiftCountsByEmployee(shiftRequests);
   const assignedShiftCountsByEmployee =
     buildAssignedShiftCountsByEmployee(forcedAssignments);
+  // key: employeeId -> value: אובייקט מצב מחושב של העובד לצורך האלגוריתם.
   const employeeStateById = new Map();
 
-  // Precompute each employee's strength and fairness state once for reuse.
   // מחשבים פעם אחת את כל נתוני העובד כדי להשתמש בהם שוב ושוב בזמן ההשמה.
   for (const employee of employees) {
     const strengthScore = calculateStrengthScore(employee);
@@ -123,7 +123,6 @@ function assignRemainingShifts(scheduleInputs, forcedAssignments = []) {
   const allAssignments = [...forcedAssignments];
   const remainingAssignments = [];
 
-  // Work through the unresolved shifts in priority order.
   // עוברים על המשמרות לפי סדר העדיפות שנקבע בשלב המיון.
   for (const shift of orderedShifts) {
     let assignedCount = 0;
@@ -132,8 +131,6 @@ function assignRemainingShifts(scheduleInputs, forcedAssignments = []) {
     while (assignedCount < shift.required_waiters) {
       const requestedEmployeeIds = requestedEmployeeIdsByShift.get(shift.id) || [];
 
-      // Only employees who requested this shift and are not already assigned to it
-      // can be scored as candidates.
       // בונים את רשימת המועמדים החוקיים למשמרת הנוכחית.
       const candidates = requestedEmployeeIds
         .filter(
@@ -168,8 +165,7 @@ function assignRemainingShifts(scheduleInputs, forcedAssignments = []) {
         break;
       }
 
-      // Take the best-scoring candidate for the current state of the shift.
-      // בוחרים את המועמד הטוב ביותר לפי דירוג המועמדים של שלב 14.
+      // בוחרים את המועמד הטוב ביותר לפי דירוג המועמדים.
       const [selectedCandidate] = scoreShiftCandidates(
         candidates,
         shift.required_strength_score,
@@ -186,7 +182,6 @@ function assignRemainingShifts(scheduleInputs, forcedAssignments = []) {
       assignedCount += 1;
       currentShiftStrength += selectedCandidate.strengthScore;
 
-      // Update the employee's assigned count so later fairness scores stay current.
       // מעדכנים מיד את מצב העובד כדי שהשיבוץ הבא ישתמש במידע ההוגנות המעודכן.
       const employeeState = employeeStateById.get(selectedCandidate.employeeId);
       employeeState.assignedShifts += 1;
