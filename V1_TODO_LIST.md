@@ -316,7 +316,7 @@ Progress note:
 
   Implement target shift calculation utilities.
 
-- [ ] Step 12
+- [x] Step 12
 
   Implement forced-assignment logic for shifts where availability is less than or equal to required coverage.
 
