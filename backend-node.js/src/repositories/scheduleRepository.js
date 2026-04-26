@@ -128,6 +128,14 @@ async function insertScheduleAssignments(connection, scheduleId, assignments) {
 }
 
 async function saveGeneratedSchedule(weekStartDate, assignments) {
+  if (!assignments.length) {
+    const error = new Error(
+      "Cannot save a generated schedule without assignments"
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
   const connection = await pool.getConnection();
 
   try {

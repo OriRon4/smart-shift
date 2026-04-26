@@ -2,12 +2,15 @@ const scheduleService = require("../services/scheduleService");
 
 async function generateSchedule(req, res, next) {
   try {
-    const { weekStartDate } = req.body;
-    const schedule = await scheduleService.generateScheduleForWeek(
+    const { weekStartDate } = req.body || {};
+    const generatedSchedule = await scheduleService.generateScheduleForWeek(
       weekStartDate
     );
 
-    res.status(200).json(schedule);
+    res.status(201).json({
+      message: "Schedule generated successfully",
+      ...generatedSchedule,
+    });
   } catch (error) {
     next(error);
   }

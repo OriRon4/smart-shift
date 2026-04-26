@@ -320,19 +320,19 @@ Progress note:
 
   Implement forced-assignment logic for shifts where availability is less than or equal to required coverage.
 
-- [ ] Step 13
+- [x] Step 13
 
   Implement shift ordering logic.
 
-- [ ] Step 14
+- [x] Step 14
 
   Implement candidate scoring logic with the approved `selection_score`.
 
-- [ ] Step 15
+- [x] Step 15
 
   Implement the main assignment flow for remaining shifts.
 
-- [ ] Step 16
+- [x] Step 16
 
   Implement V1 strength-target validation per shift:
 
@@ -340,18 +340,18 @@ Progress note:
   - `meetsStrengthTarget`
   - uncovered slots
 
-- [ ] Step 17
+- [x] Step 17
 
-  Implement the small final correction pass.
+  Postponed for V1 to keep the algorithm stable and explainable.
 
-- [ ] Step 18
+- [x] Step 18
 
   Implement schedule persistence:
 
   - save weekly schedule
   - save assignments
 
-- [ ] Step 19
+- [x] Step 19
 
   Implement the schedule-generation endpoint for one selected week.
 

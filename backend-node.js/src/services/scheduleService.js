@@ -1,4 +1,7 @@
 const scheduleRepository = require("../repositories/scheduleRepository");
+const {
+  generateScheduleAlgorithm,
+} = require("../algorithms/generateScheduleAlgorithm");
 
 function calculateSeniorityScore(seniorityMonths) {
   return Math.min(10, (seniorityMonths / 24) * 10);
@@ -23,7 +26,21 @@ async function generateScheduleForWeek(weekStartDate) {
     throw error;
   }
 
-  return scheduleRepository.getScheduleInputsByWeek(weekStartDate);
+  const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
+    weekStartDate
+  );
+  const algorithmResult = generateScheduleAlgorithm(scheduleInputs);
+  const persistenceResult = await persistGeneratedSchedule(
+    scheduleInputs,
+    algorithmResult
+  );
+
+  return {
+    weekStartDate: scheduleInputs.weekStartDate,
+    weekEndDate: scheduleInputs.weekEndDate,
+    algorithmResult,
+    persistenceResult,
+  };
 }
 
 function buildPersistedAssignments(employees, assignments) {

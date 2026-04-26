@@ -367,6 +367,44 @@ function assignRemainingShifts(scheduleInputs, forcedAssignments = []) {
   };
 }
 
+// Step 16: final shift validation summaries
+function buildShiftValidationSummaries(shifts, assignments, employees) {
+  const strengthScoreByEmployeeId = new Map(
+    employees.map((employee) => [employee.id, calculateStrengthScore(employee)])
+  );
+  const assignmentSummaryByShiftId = new Map();
+
+  for (const assignment of assignments) {
+    const existingSummary =
+      assignmentSummaryByShiftId.get(assignment.shiftId) || {
+        assignedCount: 0,
+        assignedStrengthScore: 0,
+      };
+
+    existingSummary.assignedCount += 1;
+    existingSummary.assignedStrengthScore +=
+      strengthScoreByEmployeeId.get(assignment.employeeId) || 0;
+
+    assignmentSummaryByShiftId.set(assignment.shiftId, existingSummary);
+  }
+
+  return shifts.map((shift) => {
+    const summary = assignmentSummaryByShiftId.get(shift.id) || {
+      assignedCount: 0,
+      assignedStrengthScore: 0,
+    };
+
+    return {
+      shiftId: shift.id,
+      assignedCount: summary.assignedCount,
+      assignedStrengthScore: summary.assignedStrengthScore,
+      meetsStrengthTarget:
+        summary.assignedStrengthScore >= Number(shift.required_strength_score),
+      uncoveredSlots: Math.max(0, shift.required_waiters - summary.assignedCount),
+    };
+  });
+}
+
 function generateScheduleAlgorithm(scheduleInputs) {
   const forcedShifts = findForcedShifts(
     scheduleInputs.shifts,
@@ -378,6 +416,11 @@ function generateScheduleAlgorithm(scheduleInputs) {
     scheduleInputs,
     forcedAssignments
   );
+  const shiftValidationSummaries = buildShiftValidationSummaries(
+    scheduleInputs.shifts,
+    assignmentResult.allAssignments,
+    scheduleInputs.employees
+  );
 
   return {
     forcedShifts,
@@ -385,6 +428,7 @@ function generateScheduleAlgorithm(scheduleInputs) {
     orderedShifts: assignmentResult.orderedShifts,
     remainingAssignments: assignmentResult.remainingAssignments,
     allAssignments: assignmentResult.allAssignments,
+    shiftValidationSummaries,
   };
 }
 
