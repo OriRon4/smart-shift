@@ -85,9 +85,82 @@ async function getScheduleInputsByWeek(weekStartDate) {
   };
 }
 
+async function createWeeklySchedule(connection, weekStartDate) {
+  const [result] = await connection.query(
+    `
+      INSERT INTO weekly_schedules (
+        week_start_date
+      )
+      VALUES (?)
+    `,
+    [weekStartDate]
+  );
+
+  return result.insertId;
+}
+
+async function insertScheduleAssignments(connection, scheduleId, assignments) {
+  if (!assignments.length) {
+    return 0;
+  }
+
+  const assignmentValues = assignments.map((assignment) => [
+    scheduleId,
+    assignment.shiftId,
+    assignment.employeeId,
+    assignment.assignedStrengthScore,
+  ]);
+
+  const [result] = await connection.query(
+    `
+      INSERT INTO schedule_assignments (
+        schedule_id,
+        shift_id,
+        employee_id,
+        assigned_strength_score
+      )
+      VALUES ?
+    `,
+    [assignmentValues]
+  );
+
+  return result.affectedRows;
+}
+
+async function saveGeneratedSchedule(weekStartDate, assignments) {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const scheduleId = await createWeeklySchedule(connection, weekStartDate);
+    const savedAssignmentCount = await insertScheduleAssignments(
+      connection,
+      scheduleId,
+      assignments
+    );
+
+    await connection.commit();
+
+    return {
+      scheduleId,
+      weekStartDate,
+      savedAssignmentCount,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   getActiveWaiterEmployees,
   getShiftsByWeek,
   getShiftRequestsByWeek,
   getScheduleInputsByWeek,
+  createWeeklySchedule,
+  insertScheduleAssignments,
+  saveGeneratedSchedule,
 };
