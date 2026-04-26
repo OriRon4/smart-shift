@@ -99,6 +99,22 @@ async function createWeeklySchedule(connection, weekStartDate) {
   return result.insertId;
 }
 
+async function getWeeklyScheduleByWeekStartDate(connection, weekStartDate) {
+  const [rows] = await connection.query(
+    `
+      SELECT
+        id,
+        week_start_date
+      FROM weekly_schedules
+      WHERE week_start_date = ?
+      LIMIT 1
+    `,
+    [weekStartDate]
+  );
+
+  return rows[0] || null;
+}
+
 async function insertScheduleAssignments(connection, scheduleId, assignments) {
   if (!assignments.length) {
     return 0;
@@ -141,6 +157,17 @@ async function saveGeneratedSchedule(weekStartDate, assignments) {
   try {
     await connection.beginTransaction();
 
+    const existingSchedule = await getWeeklyScheduleByWeekStartDate(
+      connection,
+      weekStartDate
+    );
+
+    if (existingSchedule) {
+      const error = new Error("Schedule already exists for this week");
+      error.statusCode = 409;
+      throw error;
+    }
+
     const scheduleId = await createWeeklySchedule(connection, weekStartDate);
     const savedAssignmentCount = await insertScheduleAssignments(
       connection,
@@ -169,6 +196,7 @@ module.exports = {
   getShiftRequestsByWeek,
   getScheduleInputsByWeek,
   createWeeklySchedule,
+  getWeeklyScheduleByWeekStartDate,
   insertScheduleAssignments,
   saveGeneratedSchedule,
 };
