@@ -355,7 +355,7 @@ Progress note:
 
   Implement the schedule-generation endpoint for one selected week.
 
-- [ ] Step 20
+- [x] Step 20
 
   Verify the backend response with the real DB data.
 
