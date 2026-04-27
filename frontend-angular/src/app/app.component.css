@@ -1,0 +1,59 @@
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-header {
+  border-bottom: 1px solid #d7dde3;
+  background: #ffffff;
+}
+
+.app-header > div,
+.app-main {
+  width: min(1120px, calc(100% - 32px));
+  margin: 0 auto;
+}
+
+.app-header > div {
+  padding: 24px 0;
+}
+
+.app-eyebrow {
+  margin: 0 0 6px;
+  color: #3f6f73;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 0;
+  font-size: 1.7rem;
+  font-weight: 700;
+}
+
+.app-main {
+  padding: 24px 0;
+}
+
+.placeholder-panel {
+  border: 1px solid #d7dde3;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 20px;
+}
+
+.placeholder-panel h2 {
+  margin-bottom: 8px;
+  font-size: 1.2rem;
+}
+
+.placeholder-panel p {
+  margin-bottom: 0;
+  color: #52616f;
+}
