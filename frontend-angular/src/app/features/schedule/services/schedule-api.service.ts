@@ -8,6 +8,7 @@ import { ScheduleBoardResponse } from '../models/schedule.models';
   providedIn: 'root'
 })
 export class ScheduleApiService {
+  // בגרסה הראשונה הפרונט פונה ישירות לשרת המקומי.
   private readonly apiUrl = 'http://localhost:3000/api/schedules';
 
   constructor(private readonly http: HttpClient) {}

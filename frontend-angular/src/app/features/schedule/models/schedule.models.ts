@@ -1,4 +1,5 @@
 export interface ScheduleBoardResponse {
+  // תגובת הלוח הראשית שמוצגת במסך הסידור.
   message: string;
   weekStartDate: string;
   weekEndDate: string;
@@ -22,6 +23,7 @@ export interface ScheduleDay {
 }
 
 export interface ScheduleShift {
+  // כרטיס משמרת בוקר או ערב בתוך עמודת יום.
   shiftId: number;
   shiftType: ScheduleShiftType;
   requiredWaiters: number;
@@ -35,6 +37,7 @@ export interface ScheduleShift {
 }
 
 export interface ScheduleWorker {
+  // שורת עובד משובץ בתוך כרטיס משמרת.
   employeeId: number;
   fullName: string;
   role: string;

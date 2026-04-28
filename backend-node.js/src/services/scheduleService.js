@@ -32,6 +32,7 @@ async function generateScheduleForWeek(weekStartDate) {
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
     weekStartDate
   );
+  // שומרים את תוצאת האלגוריתם פנימית וחושפים רק את מבנה הלוח.
   const algorithmResult = generateScheduleAlgorithm(scheduleInputs);
   await persistGeneratedSchedule(
     scheduleInputs,
@@ -42,6 +43,8 @@ async function generateScheduleForWeek(weekStartDate) {
 }
 
 function buildPersistedAssignments(employees, assignments) {
+  // השמירה כוללת את ציון החוזק של כל עובד לצורכי ביקורת.
+  // מזהה עובד -> ציון חוזק עובד
   const strengthScoreByEmployeeId = new Map(
     employees.map((employee) => [employee.id, calculateStrengthScore(employee)])
   );

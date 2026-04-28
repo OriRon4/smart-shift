@@ -18,6 +18,7 @@ export class ScheduleGridComponent {
   @Input({ required: true }) board: ScheduleBoardResponse | null = null;
 
   getShiftStatus(shift: ScheduleShift): ShiftStatus {
+    // חוסר בכוח אדם חשוב יותר מאי עמידה ביעד החוזק.
     if (shift.uncoveredSlots > 0) {
       return 'understaffed';
     }

@@ -35,6 +35,7 @@ function calculateFairnessGapScore(fairnessGap, targetShifts) {
 // שיבוצים כפויים
 function findForcedShifts(shifts, shiftRequests) {
   // קודם מרכזים את כל הבקשות לפי משמרת, כדי לדעת כמה עובדים זמינים לכל משמרת.
+  // מזהה משמרת -> רשימת מזהי עובדים שביקשו אותה
   const requestsByShiftId = new Map();
 
   for (const shiftRequest of shiftRequests) {
@@ -95,6 +96,7 @@ function orderShiftsByPriority(shifts, shiftRequests, excludedShiftIds = []) {
   const excludedShiftIdSet = new Set(excludedShiftIds);
 
   // סופרים כמה עובדים ביקשו כל משמרת, כי משמרת עם פחות זמינות צריכה לקבל עדיפות גבוהה יותר.
+  // מזהה משמרת -> מספר העובדים הזמינים
   const availableWorkersByShiftId = new Map();
 
   for (const shiftRequest of shiftRequests) {
@@ -195,6 +197,7 @@ function scoreShiftCandidates(
 
 // שלב 15: זרימת השיבוץ המרכזית
 function buildRequestedShiftCountsByEmployee(shiftRequests) {
+  // מזהה עובד -> מספר המשמרות שהעובד ביקש
   const requestedShiftCountsByEmployee = new Map();
 
   for (const shiftRequest of shiftRequests) {
@@ -211,6 +214,7 @@ function buildRequestedShiftCountsByEmployee(shiftRequests) {
 }
 
 function buildRequestedEmployeeIdsByShift(shiftRequests) {
+  // מזהה משמרת -> רשימת מזהי עובדים שביקשו אותה
   const requestedEmployeeIdsByShift = new Map();
 
   for (const shiftRequest of shiftRequests) {
@@ -225,6 +229,7 @@ function buildRequestedEmployeeIdsByShift(shiftRequests) {
 }
 
 function buildAssignedShiftCountsByEmployee(assignments) {
+  // מזהה עובד -> מספר המשמרות שהעובד קיבל
   const assignedShiftCountsByEmployee = new Map();
 
   for (const assignment of assignments) {
@@ -246,6 +251,7 @@ function buildEmployeeStateById(employees, shiftRequests, forcedAssignments) {
     buildRequestedShiftCountsByEmployee(shiftRequests);
   const assignedShiftCountsByEmployee =
     buildAssignedShiftCountsByEmployee(forcedAssignments);
+  // מזהה עובד -> מצב השיבוץ וההוגנות של העובד
   const employeeStateById = new Map();
 
   for (const employee of employees) {
@@ -313,6 +319,7 @@ function buildCandidatesForShift(
 }
 
 function assignRemainingShifts(scheduleInputs, forcedAssignments = []) {
+  // ממלאים משמרות לא כפויות באמצעות בחירת המועמד עם הציון הגבוה ביותר.
   const { employees, shifts, shiftRequests } = scheduleInputs;
   const forcedShiftIds = [
     ...new Set(forcedAssignments.map((assignment) => assignment.shiftId)),
@@ -384,11 +391,14 @@ function assignRemainingShifts(scheduleInputs, forcedAssignments = []) {
 
 // שלב 16: סיכום התוצאה
 function buildShiftValidationSummaries(shifts, assignments, employees) {
+  // סיכומי הבדיקה מתארים כיסוי וחוזק בלי לשנות את השיבוץ.
+  // מזהה עובד -> ציון חוזק עובד
   const strengthScoreByEmployeeId = new Map(
     employees.map((employee) => [employee.id, calculateStrengthScore(employee)])
   );
 
   // מרכזים את השיבוצים לפי משמרת כדי לחשב לכל משמרת כיסוי וחוזק מצטבר.
+  // מזהה משמרת -> סיכום השיבוץ במשמרת
   const assignmentSummaryByShiftId = new Map();
 
   for (const assignment of assignments) {
@@ -430,6 +440,7 @@ function buildShiftValidationSummaries(shifts, assignments, employees) {
 // 3. מאחדים את השיבוצים הכפויים והשיבוצים שנוצרו בשלב המרכזי.
 // 4. בונים סיכומי בדיקה סופיים כדי שהמערכת תוכל לדווח על איכות התוצאה.
 function generateScheduleAlgorithm(scheduleInputs) {
+  // מריצים את האלגוריתם בשלושה שלבים: כפייה, השלמה ובדיקה.
   const forcedShifts = findForcedShifts(
     scheduleInputs.shifts,
     scheduleInputs.shiftRequests

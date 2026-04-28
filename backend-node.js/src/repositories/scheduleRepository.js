@@ -70,6 +70,7 @@ async function getShiftRequestsByWeek(weekStartDate) {
 
 async function getScheduleInputsByWeek(weekStartDate) {
   const weekRange = getWeekRange(weekStartDate);
+  // שלושת מקורות הנתונים האלה הם קלט האלגוריתם המלא.
   const [employees, shifts, shiftRequests] = await Promise.all([
     getActiveWaiterEmployees(),
     getShiftsByWeek(weekRange.weekStartDate),
@@ -190,6 +191,7 @@ async function saveGeneratedSchedule(weekStartDate, assignments) {
       : await createWeeklySchedule(connection, weekStartDate);
 
     if (existingSchedule) {
+      // בגרסה הראשונה שומרים סידור עדכני אחד לשבוע באמצעות החלפת השיבוצים.
       await deleteScheduleAssignmentsByScheduleId(connection, scheduleId);
       await touchWeeklySchedule(connection, scheduleId);
     }

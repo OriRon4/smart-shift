@@ -37,6 +37,7 @@ function calculateStrengthScore(employee) {
 }
 
 function buildCountMap(items, getKey) {
+  // מפתח -> מספר מופעים
   const countByKey = new Map();
 
   for (const item of items) {
@@ -48,6 +49,7 @@ function buildCountMap(items, getKey) {
 }
 
 function buildItemsByKey(items, getKey) {
+  // מפתח -> רשימת פריטים
   const itemsByKey = new Map();
 
   for (const item of items) {
@@ -78,6 +80,7 @@ function buildAssignedWorkersForShift(
   assignedShiftCountByEmployee,
   requestedShiftCountByEmployee
 ) {
+  // ממירים שיבוצים פנימיים לשורות עובדים בכרטיס משמרת.
   const assignments = assignmentsByShiftId.get(shiftId) || [];
 
   return assignments
@@ -106,30 +109,38 @@ function buildAssignedWorkersForShift(
 }
 
 function buildScheduleBoardResponse(scheduleInputs, algorithmResult) {
+  // בונים מפות עזר פעם אחת כדי להרכיב את הלוח בצורה ברורה.
+  // מזהה עובד -> נתוני עובד
   const employeeById = new Map(
     scheduleInputs.employees.map((employee) => [employee.id, employee])
   );
+  // תאריך -> רשימת משמרות באותו יום
   const shiftsByDate = buildItemsByKey(scheduleInputs.shifts, (shift) =>
     formatDateKey(shift.shift_date)
   );
+  // מזהה משמרת -> רשימת שיבוצים במשמרת
   const assignmentsByShiftId = buildItemsByKey(
     algorithmResult.allAssignments,
     (assignment) => assignment.shiftId
   );
+  // מזהה משמרת -> סיכום בדיקת המשמרת
   const validationSummaryByShiftId = new Map(
     algorithmResult.shiftValidationSummaries.map((summary) => [
       summary.shiftId,
       summary,
     ])
   );
+  // מזהה משמרת -> מספר העובדים שביקשו את המשמרת
   const requestedCountByShiftId = buildCountMap(
     scheduleInputs.shiftRequests,
     (shiftRequest) => shiftRequest.shift_id
   );
+  // מזהה עובד -> מספר המשמרות שהעובד ביקש
   const requestedShiftCountByEmployee = buildCountMap(
     scheduleInputs.shiftRequests,
     (shiftRequest) => shiftRequest.employee_id
   );
+  // מזהה עובד -> מספר המשמרות שהעובד קיבל
   const assignedShiftCountByEmployee = buildCountMap(
     algorithmResult.allAssignments,
     (assignment) => assignment.employeeId
@@ -137,6 +148,7 @@ function buildScheduleBoardResponse(scheduleInputs, algorithmResult) {
 
   const days = buildWeekDateKeys(scheduleInputs.weekStartDate).map(
     (dateKey) => {
+      // כל יום מכיל את המשמרות שהמסך מציג ככרטיסים.
       const shifts = (shiftsByDate.get(dateKey) || [])
         .slice()
         .sort((leftShift, rightShift) => leftShift.id - rightShift.id)
@@ -186,6 +198,7 @@ function buildScheduleBoardResponse(scheduleInputs, algorithmResult) {
     weekStartDate: scheduleInputs.weekStartDate,
     weekEndDate: scheduleInputs.weekEndDate,
     generatedAt: new Date().toISOString(),
+    // נתוני הסיכום מזינים את כרטיסי המדדים שמעל הלוח.
     summary: {
       totalShifts: allShifts.length,
       fullyCoveredShifts: allShifts.filter(

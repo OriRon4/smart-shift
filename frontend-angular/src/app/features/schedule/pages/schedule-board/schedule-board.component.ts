@@ -17,6 +17,7 @@ import { ScheduleApiService } from '../../services/schedule-api.service';
   styleUrl: './schedule-board.component.css'
 })
 export class ScheduleBoardComponent {
+  // נתוני הדמו מתחילים ביום ראשון הזה כדי שהקליק הראשון יציג תוצאה.
   protected selectedWeekStartDate = '2026-04-19';
   protected board: ScheduleBoardResponse | null = null;
   protected isLoading = false;
@@ -39,6 +40,7 @@ export class ScheduleBoardComponent {
   }
 
   protected generateSchedule(): void {
+    // יצירת סידור היא פעולת השרת היחידה שמחוברת בגרסה הראשונה.
     this.isLoading = true;
     this.errorMessage = '';
 
@@ -57,6 +59,7 @@ export class ScheduleBoardComponent {
   }
 
   private changeSelectedWeek(dayOffset: number): void {
+    // החלפת שבוע מנקה את הלוח הישן כדי להציג מצב ריק אמיתי.
     this.selectedWeekStartDate = this.addDays(
       this.selectedWeekStartDate,
       dayOffset
@@ -89,6 +92,7 @@ export class ScheduleBoardComponent {
   }
 
   private resolveErrorMessage(error: unknown): string {
+    // מעדיפים הודעות ולידציה מהשרת כשהן קיימות.
     if (error instanceof HttpErrorResponse && error.error?.message) {
       return error.error.message;
     }
