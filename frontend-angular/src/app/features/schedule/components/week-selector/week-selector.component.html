@@ -1,0 +1,35 @@
+<div class="week-selector">
+  <button
+    class="week-selector__icon-button"
+    type="button"
+    aria-label="Previous week"
+    [disabled]="isLoading"
+    (click)="previousWeek.emit()"
+  >
+    &lt;
+  </button>
+
+  <div class="week-selector__range">
+    <span class="week-selector__label">Selected week</span>
+    <strong>{{ weekRangeLabel }}</strong>
+  </div>
+
+  <button
+    class="week-selector__icon-button"
+    type="button"
+    aria-label="Next week"
+    [disabled]="isLoading"
+    (click)="nextWeek.emit()"
+  >
+    &gt;
+  </button>
+
+  <button
+    class="week-selector__generate-button"
+    type="button"
+    [disabled]="isLoading"
+    (click)="generateSchedule.emit()"
+  >
+    {{ isLoading ? 'Generating...' : 'Generate Schedule' }}
+  </button>
+</div>

@@ -1,9 +1,69 @@
 <main class="schedule-board">
-  <section class="schedule-board__header" aria-labelledby="schedule-title">
-    <p class="schedule-board__eyebrow">Schedule feature</p>
-    <h1 id="schedule-title">Smart Shift Schedule</h1>
-    <p class="schedule-board__summary">
-      This routed page shell is ready for the schedule board UI.
-    </p>
-  </section>
+  <header class="schedule-board__toolbar">
+    <div>
+      <p class="schedule-board__eyebrow">V1 schedule board</p>
+      <h1>Week View</h1>
+      <p class="schedule-board__summary">
+        Generate and review the waiter schedule for the selected week.
+      </p>
+    </div>
+
+    <div class="schedule-board__actions">
+      <app-week-selector
+        [weekRangeLabel]="weekRangeLabel"
+        [isLoading]="isLoading"
+        (previousWeek)="previousWeek()"
+        (nextWeek)="nextWeek()"
+        (generateSchedule)="generateSchedule()"
+      />
+
+      <div class="schedule-board__placeholder-actions">
+        <button type="button" disabled>Validate Schedule</button>
+        <button type="button" disabled>Save Changes</button>
+      </div>
+    </div>
+  </header>
+
+  @if (board) {
+    <section class="schedule-board__summary-cards" aria-label="Schedule summary">
+      <article>
+        <span>Total shifts</span>
+        <strong>{{ board.summary.totalShifts }}</strong>
+      </article>
+
+      <article>
+        <span>Fully covered</span>
+        <strong>{{ board.summary.fullyCoveredShifts }}</strong>
+      </article>
+
+      <article>
+        <span>Understaffed</span>
+        <strong>{{ board.summary.underCoveredShifts }}</strong>
+      </article>
+
+      <article>
+        <span>Strength met</span>
+        <strong>{{ board.summary.meetsStrengthTargetShifts }}</strong>
+      </article>
+    </section>
+  }
+
+  @if (isLoading) {
+    <section class="schedule-board__state" aria-live="polite">
+      <strong>Generating schedule...</strong>
+      <p>The algorithm is assigning workers for {{ weekRangeLabel }}.</p>
+    </section>
+  } @else if (errorMessage) {
+    <section class="schedule-board__state schedule-board__state--error" aria-live="polite">
+      <strong>Schedule generation failed</strong>
+      <p>{{ errorMessage }}</p>
+    </section>
+  } @else if (board) {
+    <app-schedule-grid [board]="board" />
+  } @else {
+    <section class="schedule-board__state">
+      <strong>No schedule generated yet</strong>
+      <p>Select a week and click Generate Schedule to create the V1 board.</p>
+    </section>
+  }
 </main>

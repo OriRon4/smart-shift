@@ -1,0 +1,71 @@
+@if (board) {
+  <section class="schedule-grid" aria-label="Weekly schedule board">
+    @for (day of board.days; track day.date) {
+      <article class="day-column">
+        <header class="day-column__header">
+          <span>{{ day.dayName }}</span>
+          <strong>{{ day.date }}</strong>
+        </header>
+
+        <div class="day-column__shifts">
+          @for (shift of day.shifts; track shift.shiftId) {
+            <section
+              class="shift-card"
+              [class.shift-card--optimal]="getShiftStatus(shift) === 'optimal'"
+              [class.shift-card--covered]="getShiftStatus(shift) === 'covered'"
+              [class.shift-card--understaffed]="getShiftStatus(shift) === 'understaffed'"
+            >
+              <header class="shift-card__header">
+                <div>
+                  <h2>{{ formatShiftType(shift) }}</h2>
+                  <p>{{ shift.assignedCount }}/{{ shift.requiredWaiters }} assigned</p>
+                </div>
+
+                <span class="shift-card__status">
+                  {{ getShiftStatusLabel(shift) }}
+                </span>
+              </header>
+
+              <p class="shift-card__requests">
+                {{ shift.requestedCount }} workers requested this shift
+              </p>
+
+              <div class="worker-list">
+                @for (worker of shift.assignedWorkers; track worker.employeeId) {
+                  <div class="worker-row">
+                    <span class="worker-row__avatar">
+                      {{ getWorkerInitials(worker) }}
+                    </span>
+
+                    <div class="worker-row__body">
+                      <div class="worker-row__main">
+                        <strong>{{ worker.fullName }}</strong>
+                        <span>{{ worker.role }}</span>
+                      </div>
+
+                      <p>
+                        Strength {{ worker.strengthScore }} |
+                        {{ worker.assignedShiftCount }}/{{ worker.requestedShiftCount }} shifts
+                      </p>
+                    </div>
+                  </div>
+                } @empty {
+                  <p class="worker-list__empty">No workers assigned yet.</p>
+                }
+              </div>
+
+              <footer class="shift-card__footer">
+                Strength:
+                <strong>{{ shift.assignedStrengthScore }}</strong>
+                /
+                <span>{{ shift.requiredStrengthScore }} required</span>
+              </footer>
+            </section>
+          } @empty {
+            <p class="day-column__empty">No shifts for this day.</p>
+          }
+        </div>
+      </article>
+    }
+  </section>
+}

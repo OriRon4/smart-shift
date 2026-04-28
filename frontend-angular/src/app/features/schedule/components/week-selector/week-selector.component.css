@@ -1,0 +1,66 @@
+.week-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.week-selector__icon-button,
+.week-selector__generate-button {
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1f2933;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.week-selector__icon-button {
+  width: 40px;
+  height: 40px;
+}
+
+.week-selector__generate-button {
+  min-height: 40px;
+  padding: 0 18px;
+  background: #1f7a4d;
+  border-color: #1f7a4d;
+  color: #ffffff;
+}
+
+.week-selector__icon-button:hover:not(:disabled),
+.week-selector__generate-button:hover:not(:disabled) {
+  border-color: #195f3e;
+  background: #195f3e;
+  color: #ffffff;
+}
+
+.week-selector__icon-button:disabled,
+.week-selector__generate-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.week-selector__range {
+  min-width: 220px;
+}
+
+.week-selector__label {
+  display: block;
+  margin-bottom: 2px;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.week-selector__range strong {
+  color: #1f2933;
+  font-size: 1rem;
+}

@@ -143,6 +143,29 @@ async function insertScheduleAssignments(connection, scheduleId, assignments) {
   return result.affectedRows;
 }
 
+async function deleteScheduleAssignmentsByScheduleId(connection, scheduleId) {
+  const [result] = await connection.query(
+    `
+      DELETE FROM schedule_assignments
+      WHERE schedule_id = ?
+    `,
+    [scheduleId]
+  );
+
+  return result.affectedRows;
+}
+
+async function touchWeeklySchedule(connection, scheduleId) {
+  await connection.query(
+    `
+      UPDATE weekly_schedules
+      SET updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `,
+    [scheduleId]
+  );
+}
+
 async function saveGeneratedSchedule(weekStartDate, assignments) {
   if (!assignments.length) {
     const error = new Error(
@@ -162,13 +185,15 @@ async function saveGeneratedSchedule(weekStartDate, assignments) {
       weekStartDate
     );
 
+    const scheduleId = existingSchedule
+      ? existingSchedule.id
+      : await createWeeklySchedule(connection, weekStartDate);
+
     if (existingSchedule) {
-      const error = new Error("Schedule already exists for this week");
-      error.statusCode = 409;
-      throw error;
+      await deleteScheduleAssignmentsByScheduleId(connection, scheduleId);
+      await touchWeeklySchedule(connection, scheduleId);
     }
 
-    const scheduleId = await createWeeklySchedule(connection, weekStartDate);
     const savedAssignmentCount = await insertScheduleAssignments(
       connection,
       scheduleId,
@@ -181,6 +206,7 @@ async function saveGeneratedSchedule(weekStartDate, assignments) {
       scheduleId,
       weekStartDate,
       savedAssignmentCount,
+      replacedExisting: Boolean(existingSchedule),
     };
   } catch (error) {
     await connection.rollback();
@@ -198,5 +224,6 @@ module.exports = {
   createWeeklySchedule,
   getWeeklyScheduleByWeekStartDate,
   insertScheduleAssignments,
+  deleteScheduleAssignmentsByScheduleId,
   saveGeneratedSchedule,
 };

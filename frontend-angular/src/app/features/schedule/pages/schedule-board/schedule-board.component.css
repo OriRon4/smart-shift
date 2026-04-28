@@ -1,11 +1,15 @@
 .schedule-board {
   min-height: 100vh;
-  padding: 32px;
   background: #f6f7f9;
+  padding: 28px;
 }
 
-.schedule-board__header {
-  max-width: 720px;
+.schedule-board__toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  margin-bottom: 22px;
 }
 
 .schedule-board__eyebrow {
@@ -20,7 +24,7 @@
 h1 {
   margin: 0;
   color: #1f2933;
-  font-size: 2rem;
+  font-size: 2.25rem;
   line-height: 1.15;
 }
 
@@ -28,4 +32,117 @@ h1 {
   margin: 12px 0 0;
   color: #3e4c59;
   line-height: 1.5;
+}
+
+.schedule-board__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.schedule-board__placeholder-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.schedule-board__placeholder-actions button {
+  min-height: 36px;
+  border: 1px solid #cfd8e3;
+  border-radius: 8px;
+  background: #eef2f7;
+  color: #64748b;
+  font: inherit;
+  font-weight: 700;
+  padding: 0 14px;
+}
+
+.schedule-board__summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.schedule-board__summary-cards article {
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.schedule-board__summary-cards span {
+  display: block;
+  color: #64748b;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.schedule-board__summary-cards strong {
+  color: #1f2933;
+  font-size: 1.75rem;
+  line-height: 1;
+}
+
+.schedule-board__state {
+  border: 1px dashed #b9c6d6;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #3e4c59;
+  padding: 28px;
+}
+
+.schedule-board__state strong {
+  color: #1f2933;
+  font-size: 1.125rem;
+}
+
+.schedule-board__state p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.schedule-board__state--error {
+  border-color: #efb5b0;
+  background: #fff7f6;
+}
+
+.schedule-board__state--error strong {
+  color: #9d2924;
+}
+
+@media (max-width: 900px) {
+  .schedule-board__toolbar,
+  .schedule-board__actions {
+    align-items: stretch;
+  }
+
+  .schedule-board__toolbar {
+    flex-direction: column;
+  }
+
+  .schedule-board__placeholder-actions {
+    justify-content: flex-start;
+  }
+
+  .schedule-board__summary-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .schedule-board {
+    padding: 18px;
+  }
+
+  h1 {
+    font-size: 1.8rem;
+  }
+
+  .schedule-board__summary-cards {
+    grid-template-columns: 1fr;
+  }
 }
