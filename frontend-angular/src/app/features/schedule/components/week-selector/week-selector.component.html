@@ -24,12 +24,14 @@
     &gt;
   </button>
 
-  <button
-    class="week-selector__generate-button"
-    type="button"
-    [disabled]="isLoading"
-    (click)="generateSchedule.emit()"
-  >
-    {{ isLoading ? 'Generating...' : 'Generate Schedule' }}
-  </button>
+  @if (canGenerate) {
+    <button
+      class="week-selector__generate-button"
+      type="button"
+      [disabled]="isLoading"
+      (click)="generateSchedule.emit()"
+    >
+      {{ isLoading ? 'Generating...' : 'Generate Schedule' }}
+    </button>
+  }
 </div>

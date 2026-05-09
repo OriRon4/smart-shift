@@ -1,0 +1,154 @@
+<main class="employees-page">
+  <section class="employees-hero">
+    <div>
+      <span>Team directory</span>
+      <h1>Employees</h1>
+      <p>Browse the team in full rows. Select an employee to open a detailed profile card.</p>
+    </div>
+  </section>
+
+  @if (errorMessage) {
+    <section class="employees-page__state employees-page__state--error">
+      {{ errorMessage }}
+    </section>
+  }
+
+  @if (successMessage) {
+    <section class="employees-page__state employees-page__state--success">
+      {{ successMessage }}
+    </section>
+  }
+
+  <section class="employees-layout">
+    <div class="employees-table">
+      <header class="employees-table__header">
+        <span>Name</span>
+        <span>Role</span>
+        <span>Status</span>
+        <span>Action</span>
+      </header>
+
+      @for (employee of employees; track employee.id) {
+        <button
+          type="button"
+          class="employee-row"
+          [disabled]="!canViewDetails()"
+          [class.employee-row--active]="selectedEmployee?.id === employee.id"
+          [class.employee-row--needs-setup]="needsManagerSetup(employee)"
+          (click)="openEmployee(employee)"
+        >
+          <span class="employee-row__identity">
+            <strong>{{ employee.fullName }}</strong>
+            <small>#{{ employee.id }}</small>
+          </span>
+          <span>{{ formatJobRole(employee.jobRole) }}</span>
+          <span>
+            @if (needsManagerSetup(employee)) {
+              Needs setup
+            } @else if (employee.isActive === false) {
+              Inactive
+            } @else {
+              Active
+            }
+          </span>
+          <span>{{ canViewDetails() ? 'Open card' : 'Names only' }}</span>
+        </button>
+      } @empty {
+        <p class="employees-table__empty">No employees found.</p>
+      }
+    </div>
+
+    @if (canViewDetails() && editableEmployee) {
+      <form class="employee-card" (submit)="$event.preventDefault(); saveEmployee()">
+        <div class="employee-card__top">
+          <div class="employee-card__avatar">
+            {{ editableEmployee.fullName.charAt(0) }}
+          </div>
+          <div>
+            <span>{{ canEdit() ? 'Editable profile' : 'Read-only profile' }}</span>
+            <h2>{{ editableEmployee.fullName }}</h2>
+            <p>{{ formatJobRole(editableEmployee.jobRole) }}</p>
+            @if (needsManagerSetup(editableEmployee)) {
+              <small class="employee-card__setup-warning">
+                Manager setup required: choose final role and quality scores.
+              </small>
+            }
+          </div>
+        </div>
+
+        <div class="employee-card__fields">
+          <label>
+            Name
+            <input
+              type="text"
+              name="fullName"
+              [value]="editableEmployee.fullName"
+              (input)="updateStringField('fullName', $event)"
+              [disabled]="!canEdit()"
+            />
+          </label>
+
+          <label>
+            Job role
+            <select
+              name="jobRole"
+              [value]="editableEmployee.jobRole"
+              (change)="updateStringField('jobRole', $event)"
+              [disabled]="!canEdit()"
+            >
+              @for (jobRole of jobRoles; track jobRole) {
+                <option [value]="jobRole">{{ formatJobRole(jobRole) }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="employee-card__scores">
+          <label>
+            Professionalism
+            <input type="number" name="professionalism" min="0" max="10" [value]="editableEmployee.professionalism" (input)="updateNumberField('professionalism', $event)" [disabled]="!canEdit()" />
+          </label>
+
+          <label>
+            Responsibility
+            <input type="number" name="responsibility" min="0" max="10" [value]="editableEmployee.responsibility" (input)="updateNumberField('responsibility', $event)" [disabled]="!canEdit()" />
+          </label>
+
+          <label>
+            Pressure
+            <input type="number" name="pressureHandling" min="0" max="10" [value]="editableEmployee.pressureHandling" (input)="updateNumberField('pressureHandling', $event)" [disabled]="!canEdit()" />
+          </label>
+
+          <label>
+            Seniority
+            <input type="number" name="seniorityMonths" min="0" [value]="editableEmployee.seniorityMonths" (input)="updateNumberField('seniorityMonths', $event)" [disabled]="!canEdit()" />
+          </label>
+
+          <label>
+            Potential
+            <input type="number" name="potential" min="0" max="10" [value]="editableEmployee.potential" (input)="updateNumberField('potential', $event)" [disabled]="!canEdit()" />
+          </label>
+        </div>
+
+        <label class="employee-card__active">
+          <input type="checkbox" name="isActive" [checked]="editableEmployee.isActive" (change)="updateActive($event)" [disabled]="!canEdit()" />
+          Active employee
+        </label>
+
+        @if (canEdit()) {
+          <button type="submit" [disabled]="isLoading">Save employee</button>
+        }
+      </form>
+    } @else if (!canViewDetails()) {
+      <section class="employee-card employee-card--empty">
+        <strong>Names-only access</strong>
+        <p>Regular employees can view the team list, but cannot open employee profiles.</p>
+      </section>
+    } @else {
+      <section class="employee-card employee-card--empty">
+        <strong>Select an employee</strong>
+        <p>The profile card will open here.</p>
+      </section>
+    }
+  </section>
+</main>

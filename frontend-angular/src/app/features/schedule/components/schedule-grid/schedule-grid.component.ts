@@ -1,12 +1,21 @@
-import { Component, Input } from '@angular/core';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
 
 import {
+  JobRole,
   ScheduleBoardResponse,
+  ScheduleRoleGroup,
   ScheduleShift,
   ScheduleWorker
 } from '../../models/schedule.models';
 
-type ShiftStatus = 'optimal' | 'covered' | 'understaffed';
+type RoleGroupStatus = 'optimal' | 'covered' | 'understaffed' | 'plain';
+
+export interface ReplaceAssignmentRequest {
+  shiftId: number;
+  jobRole: JobRole;
+  employeeId: number;
+  employeeName: string;
+}
 
 @Component({
   selector: 'app-schedule-grid',
@@ -16,18 +25,24 @@ type ShiftStatus = 'optimal' | 'covered' | 'understaffed';
 })
 export class ScheduleGridComponent {
   @Input({ required: true }) board: ScheduleBoardResponse | null = null;
+  @Input() canManage = false;
 
-  getShiftStatus(shift: ScheduleShift): ShiftStatus {
-    // חוסר בכוח אדם חשוב יותר מאי עמידה ביעד החוזק.
-    if (shift.uncoveredSlots > 0) {
+  @Output() replaceAssignment = new EventEmitter<ReplaceAssignmentRequest>();
+
+  getRoleGroupStatus(roleGroup: ScheduleRoleGroup): RoleGroupStatus {
+    if (roleGroup.uncoveredSlots === undefined) {
+      return 'plain';
+    }
+
+    if (roleGroup.uncoveredSlots > 0) {
       return 'understaffed';
     }
 
-    return shift.meetsStrengthTarget ? 'optimal' : 'covered';
+    return roleGroup.meetsStrengthTarget ? 'optimal' : 'covered';
   }
 
-  getShiftStatusLabel(shift: ScheduleShift): string {
-    const status = this.getShiftStatus(shift);
+  getRoleGroupStatusLabel(roleGroup: ScheduleRoleGroup): string {
+    const status = this.getRoleGroupStatus(roleGroup);
 
     if (status === 'understaffed') {
       return 'Understaffed';
@@ -37,7 +52,23 @@ export class ScheduleGridComponent {
       return 'Covered';
     }
 
-    return 'Optimal';
+    if (status === 'optimal') {
+      return 'Optimal';
+    }
+
+    return `${roleGroup.assignedCount}/${roleGroup.requiredCount}`;
+  }
+
+  getRoleGroupClass(roleGroup: ScheduleRoleGroup): string {
+    return `role-group--${roleGroup.jobRole.replace('_', '-')}`;
+  }
+
+  formatJobRole(jobRole: string): string {
+    if (jobRole === 'shift_leader') {
+      return 'Shift manager';
+    }
+
+    return jobRole.replace('_', ' ');
   }
 
   formatShiftType(shift: ScheduleShift): string {
@@ -51,5 +82,18 @@ export class ScheduleGridComponent {
       .join('')
       .slice(0, 2)
       .toUpperCase();
+  }
+
+  requestReplacement(
+    shift: ScheduleShift,
+    roleGroup: ScheduleRoleGroup,
+    worker: ScheduleWorker
+  ): void {
+    this.replaceAssignment.emit({
+      shiftId: shift.shiftId,
+      jobRole: roleGroup.jobRole,
+      employeeId: worker.employeeId,
+      employeeName: worker.fullName
+    });
   }
 }

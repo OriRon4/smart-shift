@@ -1,0 +1,136 @@
+<main class="login-page">
+  <section class="login-visual" aria-label="Smart-Shift brand">
+    <div class="smart-logo">
+      <div class="smart-logo__mark">
+        <span>S</span>
+      </div>
+      <div>
+        <strong>Smart-Shift</strong>
+        <small>Weekly restaurant scheduling</small>
+      </div>
+    </div>
+
+    <div class="login-visual__content">
+      <span>Operations workspace</span>
+      <h1>Plan the week. Keep the team aligned.</h1>
+      <p>
+        A clean scheduling system for managers, shift managers, and employees.
+      </p>
+    </div>
+
+    <div class="login-preview">
+      <article>
+        <strong>14</strong>
+        <span>weekly shifts</span>
+      </article>
+      <article>
+        <strong>3</strong>
+        <span>job roles</span>
+      </article>
+      <article>
+        <strong>Live</strong>
+        <span>availability</span>
+      </article>
+    </div>
+  </section>
+
+  <section class="login-panel">
+    <div class="login-panel__header">
+      <span>{{ isRegisterMode ? 'New worker' : 'Welcome back' }}</span>
+      <h2>{{ isRegisterMode ? 'Create worker access' : 'Log in to Smart-Shift' }}</h2>
+      <p>
+        @if (isRegisterMode) {
+          New workers are created as regular employees.
+        } @else {
+          Use a seeded account or create a new worker login.
+        }
+      </p>
+    </div>
+
+    <div class="login-mode">
+      <button type="button" [class.login-mode__active]="!isRegisterMode" (click)="showLogin()">Log in</button>
+      <button type="button" [class.login-mode__active]="isRegisterMode" (click)="showRegister()">New worker</button>
+    </div>
+
+    @if (!isRegisterMode) {
+      <form class="login-form" (submit)="$event.preventDefault(); submit()">
+        <label>
+          Username or email
+          <input
+            type="text"
+            name="login"
+            autocomplete="username"
+            [value]="loginValue"
+            (input)="updateLoginValue($event)"
+            required
+          />
+        </label>
+
+        <label>
+          Password
+          <input
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            [value]="password"
+            (input)="updatePassword($event)"
+            required
+          />
+        </label>
+
+        @if (errorMessage) {
+          <p class="login-form__error">{{ errorMessage }}</p>
+        }
+
+        <button type="submit" [disabled]="isLoading">
+          {{ isLoading ? 'Logging in...' : 'Log in' }}
+        </button>
+      </form>
+
+      <div class="demo-accounts" aria-label="Demo accounts">
+        <button type="button" (click)="useDemoAccount('manager@example.com')">
+          <strong>Manager</strong>
+          <span>manager&#64;example.com</span>
+        </button>
+        <button type="button" (click)="useDemoAccount('leader@example.com')">
+          <strong>Shift manager</strong>
+          <span>leader&#64;example.com</span>
+        </button>
+        <button type="button" (click)="useDemoAccount('employee@example.com')">
+          <strong>Employee</strong>
+          <span>employee&#64;example.com</span>
+        </button>
+      </div>
+    } @else {
+      <form class="login-form" (submit)="$event.preventDefault(); registerWorker()">
+        <label>
+          Full name
+          <input type="text" [value]="registerFullName" (input)="updateRegisterField('registerFullName', $event)" required />
+        </label>
+
+        <label>
+          Email
+          <input type="email" [value]="registerEmail" (input)="updateRegisterField('registerEmail', $event)" required />
+        </label>
+
+        <label>
+          Username
+          <input type="text" [value]="registerUsername" (input)="updateRegisterField('registerUsername', $event)" required />
+        </label>
+
+        <label>
+          Password
+          <input type="password" [value]="registerPassword" (input)="updateRegisterField('registerPassword', $event)" required />
+        </label>
+
+        @if (errorMessage) {
+          <p class="login-form__error">{{ errorMessage }}</p>
+        }
+
+        <button type="submit" [disabled]="isLoading">
+          {{ isLoading ? 'Creating access...' : 'Create and sign in' }}
+        </button>
+      </form>
+    }
+  </section>
+</main>

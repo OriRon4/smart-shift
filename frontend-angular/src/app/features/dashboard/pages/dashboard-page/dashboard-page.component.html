@@ -1,0 +1,133 @@
+<main class="dashboard-page">
+  <section class="dashboard-hero">
+    <div>
+      <span class="dashboard-hero__eyebrow">Smart-Shift</span>
+      <h1>{{ dashboardTitle }}</h1>
+      <p>
+        Welcome, {{ currentUser()?.displayName }}. This view is tailored to your permissions for the selected week.
+      </p>
+    </div>
+
+    <div class="dashboard-hero__actions">
+      <a routerLink="/schedule">Open Schedule</a>
+      <a routerLink="/availability">Availability</a>
+    </div>
+  </section>
+
+  @if (isManager()) {
+    <section class="metric-grid">
+      <article>
+        <span>Coverage</span>
+        <strong>{{ coveragePercent }}%</strong>
+      </article>
+      <article>
+        <span>Unfilled slots</span>
+        <strong>{{ unfilledSlots }}</strong>
+      </article>
+      <article>
+        <span>Availability sent</span>
+        <strong>{{ availabilitySubmissionCount }}/{{ activeEmployeeCount }}</strong>
+      </article>
+      <article>
+        <span>Strength risks</span>
+        <strong>{{ strengthRiskGroups }}</strong>
+      </article>
+    </section>
+
+    <section class="dashboard-panel">
+      <header>
+        <h2>Manager Focus</h2>
+        <a routerLink="/employees">Manage employees</a>
+      </header>
+      <div class="manager-dashboard-grid">
+        <article class="manager-card">
+          <span>Role mix</span>
+          <div class="role-mix">
+            <strong>{{ waiterCount }}</strong><small>Waiters</small>
+            <strong>{{ bartenderCount }}</strong><small>Bartenders</small>
+            <strong>{{ shiftLeaderCount }}</strong><small>Shift managers</small>
+          </div>
+        </article>
+
+        <article class="manager-card">
+          <span>Availability volume</span>
+          <strong>{{ availabilityShiftCount }}</strong>
+          <p>Total available shift selections submitted for the week.</p>
+        </article>
+
+        <article class="manager-card manager-card--wide">
+          <span>Action list</span>
+          <div class="alert-list">
+            @for (alert of managerAlerts; track alert) {
+              <p>{{ alert }}</p>
+            }
+          </div>
+        </article>
+      </div>
+    </section>
+  } @else if (isShiftLeader()) {
+    <section class="metric-grid">
+      <article>
+        <span>My shifts</span>
+        <strong>{{ myShifts.length }}</strong>
+      </article>
+      <article>
+        <span>Availability sent</span>
+        <strong>{{ selectedAvailabilityCount }}</strong>
+      </article>
+      <article>
+        <span>Team members</span>
+        <strong>{{ activeEmployeeCount }}</strong>
+      </article>
+    </section>
+
+    <section class="dashboard-panel">
+      <header>
+        <h2>Shift Manager View</h2>
+        <a routerLink="/employees">View employees</a>
+      </header>
+      <div class="shift-list">
+        @for (shift of myShifts; track shift.date + shift.shiftType + shift.roleLabel) {
+          <article>
+            <strong>{{ shift.dayName }} {{ shift.shiftType }}</strong>
+            <span>{{ shift.date }} | {{ shift.roleLabel }}</span>
+          </article>
+        } @empty {
+          <p>No assigned shifts for this week.</p>
+        }
+      </div>
+    </section>
+  } @else {
+    <section class="metric-grid">
+      <article>
+        <span>My shifts this week</span>
+        <strong>{{ myShifts.length }}</strong>
+      </article>
+      <article>
+        <span>Availability selected</span>
+        <strong>{{ selectedAvailabilityCount }}</strong>
+      </article>
+      <article>
+        <span>Next shift</span>
+        <strong>{{ nextPersonalShift?.shiftType || 'None' }}</strong>
+      </article>
+    </section>
+
+    <section class="dashboard-panel">
+      <header>
+        <h2>My Scheduled Shifts</h2>
+        <a routerLink="/schedule">View full week</a>
+      </header>
+      <div class="shift-list">
+        @for (shift of myShifts; track shift.date + shift.shiftType + shift.roleLabel) {
+          <article>
+            <strong>{{ shift.dayName }} {{ shift.shiftType }}</strong>
+            <span>{{ shift.date }} | {{ shift.roleLabel }}</span>
+          </article>
+        } @empty {
+          <p>You are not assigned to shifts this week.</p>
+        }
+      </div>
+    </section>
+  }
+</main>

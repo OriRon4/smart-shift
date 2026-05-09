@@ -1,0 +1,74 @@
+<main class="availability-page">
+  <header class="availability-page__toolbar">
+    <div>
+      <span>Availability</span>
+      <h1>Submit Availability</h1>
+      <p>Select the morning and evening shifts you can work this week.</p>
+    </div>
+
+    <app-week-selector
+      [weekRangeLabel]="weekRangeLabel"
+      [isLoading]="isLoading"
+      [canGenerate]="false"
+      (previousWeek)="previousWeek()"
+      (nextWeek)="nextWeek()"
+    />
+  </header>
+
+  @if (errorMessage) {
+    <section class="availability-page__state availability-page__state--error">
+      {{ errorMessage }}
+    </section>
+  }
+
+  @if (successMessage) {
+    <section class="availability-page__state availability-page__state--success">
+      {{ successMessage }}
+    </section>
+  }
+
+  @if (availability) {
+    <section class="availability-card">
+      <header>
+        <div>
+          <strong>{{ selectedShiftIds.size }} selected</strong>
+          <span>Choose any of the 14 weekly shifts</span>
+        </div>
+
+        <button
+          class="availability-page__submit"
+          type="button"
+          [disabled]="isLoading"
+          (click)="submitAvailability()"
+        >
+          Submit Availability
+        </button>
+      </header>
+
+      <section class="availability-grid" aria-label="Availability grid">
+        @for (day of availability.days; track day.date) {
+          <article class="availability-day">
+            <header>
+              <strong>{{ day.dayName }}</strong>
+              <span>{{ day.date }}</span>
+            </header>
+
+            @for (shift of day.shifts; track shift.shiftId) {
+              <button
+                type="button"
+                [class.availability-shift--selected]="isSelected(shift.shiftId)"
+                (click)="toggleShift(shift.shiftId)"
+              >
+                {{ shift.shiftType }}
+              </button>
+            }
+          </article>
+        }
+      </section>
+    </section>
+  } @else {
+    <section class="availability-page__state">
+      Loading availability...
+    </section>
+  }
+</main>

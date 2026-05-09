@@ -1,3 +1,6 @@
+const { PERMISSION_ROLES, SCHEDULE_JOB_ROLES } = require("../constants/roles");
+const { calculateStrengthScore } = require("../algorithms/generateScheduleAlgorithm");
+
 function formatDateKey(value) {
   if (value instanceof Date) {
     const year = value.getFullYear();
@@ -20,24 +23,7 @@ function roundScore(value) {
   return Number(Number(value || 0).toFixed(1));
 }
 
-function calculateSeniorityScore(seniorityMonths) {
-  return Math.min(10, (seniorityMonths / 24) * 10);
-}
-
-function calculateStrengthScore(employee) {
-  const seniorityScore = calculateSeniorityScore(employee.seniority_months);
-
-  return (
-    0.35 * employee.professionalism +
-    0.3 * employee.responsibility +
-    0.2 * employee.pressure_handling +
-    0.1 * seniorityScore +
-    0.05 * employee.potential
-  );
-}
-
 function buildCountMap(items, getKey) {
-  // מפתח -> מספר מופעים
   const countByKey = new Map();
 
   for (const item of items) {
@@ -49,7 +35,6 @@ function buildCountMap(items, getKey) {
 }
 
 function buildItemsByKey(items, getKey) {
-  // מפתח -> רשימת פריטים
   const itemsByKey = new Map();
 
   for (const item of items) {
@@ -73,15 +58,20 @@ function buildWeekDateKeys(weekStartDate) {
   });
 }
 
-function buildAssignedWorkersForShift(
+function getRequiredCount(shift, roleConfig) {
+  return Number(shift[roleConfig.requirementField] || 0);
+}
+
+function buildAssignedWorkersForRole(
   shiftId,
-  assignmentsByShiftId,
+  jobRole,
+  assignmentsByShiftAndRole,
   employeeById,
   assignedShiftCountByEmployee,
-  requestedShiftCountByEmployee
+  requestedShiftCountByEmployee,
+  includeManagerMetrics
 ) {
-  // ממירים שיבוצים פנימיים לשורות עובדים בכרטיס משמרת.
-  const assignments = assignmentsByShiftId.get(shiftId) || [];
+  const assignments = assignmentsByShiftAndRole.get(`${shiftId}:${jobRole}`) || [];
 
   return assignments
     .map((assignment) => {
@@ -91,16 +81,21 @@ function buildAssignedWorkersForShift(
         return null;
       }
 
-      return {
+      const worker = {
         employeeId: employee.id,
         fullName: employee.full_name,
-        role: employee.role,
-        strengthScore: roundScore(calculateStrengthScore(employee)),
-        assignedShiftCount:
-          assignedShiftCountByEmployee.get(employee.id) || 0,
-        requestedShiftCount:
-          requestedShiftCountByEmployee.get(employee.id) || 0,
+        jobRole: employee.role,
       };
+
+      if (includeManagerMetrics) {
+        worker.strengthScore = roundScore(calculateStrengthScore(employee));
+        worker.assignedShiftCount =
+          assignedShiftCountByEmployee.get(employee.id) || 0;
+        worker.requestedShiftCount =
+          requestedShiftCountByEmployee.get(employee.id) || 0;
+      }
+
+      return worker;
     })
     .filter(Boolean)
     .sort((leftWorker, rightWorker) =>
@@ -108,39 +103,42 @@ function buildAssignedWorkersForShift(
     );
 }
 
-function buildScheduleBoardResponse(scheduleInputs, algorithmResult) {
-  // בונים מפות עזר פעם אחת כדי להרכיב את הלוח בצורה ברורה.
-  // מזהה עובד -> נתוני עובד
+function buildScheduleBoardResponse(
+  scheduleInputs,
+  algorithmResult,
+  options = {}
+) {
+  const includeManagerMetrics =
+    options.permissionRole === PERMISSION_ROLES.MANAGER;
   const employeeById = new Map(
     scheduleInputs.employees.map((employee) => [employee.id, employee])
   );
-  // תאריך -> רשימת משמרות באותו יום
   const shiftsByDate = buildItemsByKey(scheduleInputs.shifts, (shift) =>
     formatDateKey(shift.shift_date)
   );
-  // מזהה משמרת -> רשימת שיבוצים במשמרת
-  const assignmentsByShiftId = buildItemsByKey(
+  const assignmentsByShiftAndRole = buildItemsByKey(
     algorithmResult.allAssignments,
-    (assignment) => assignment.shiftId
+    (assignment) => `${assignment.shiftId}:${assignment.jobRole}`
   );
-  // מזהה משמרת -> סיכום בדיקת המשמרת
-  const validationSummaryByShiftId = new Map(
+  const validationSummaryByShiftAndRole = new Map(
     algorithmResult.shiftValidationSummaries.map((summary) => [
-      summary.shiftId,
+      `${summary.shiftId}:${summary.jobRole}`,
       summary,
     ])
   );
-  // מזהה משמרת -> מספר העובדים שביקשו את המשמרת
-  const requestedCountByShiftId = buildCountMap(
-    scheduleInputs.shiftRequests,
-    (shiftRequest) => shiftRequest.shift_id
+  const requestedCountByShiftAndRole = buildCountMap(
+    scheduleInputs.shiftRequests.filter((shiftRequest) =>
+      employeeById.has(shiftRequest.employee_id)
+    ),
+    (shiftRequest) => {
+      const employee = employeeById.get(shiftRequest.employee_id);
+      return `${shiftRequest.shift_id}:${employee.role}`;
+    }
   );
-  // מזהה עובד -> מספר המשמרות שהעובד ביקש
   const requestedShiftCountByEmployee = buildCountMap(
     scheduleInputs.shiftRequests,
     (shiftRequest) => shiftRequest.employee_id
   );
-  // מזהה עובד -> מספר המשמרות שהעובד קיבל
   const assignedShiftCountByEmployee = buildCountMap(
     algorithmResult.allAssignments,
     (assignment) => assignment.employeeId
@@ -148,39 +146,61 @@ function buildScheduleBoardResponse(scheduleInputs, algorithmResult) {
 
   const days = buildWeekDateKeys(scheduleInputs.weekStartDate).map(
     (dateKey) => {
-      // כל יום מכיל את המשמרות שהמסך מציג ככרטיסים.
       const shifts = (shiftsByDate.get(dateKey) || [])
         .slice()
         .sort((leftShift, rightShift) => leftShift.id - rightShift.id)
         .map((shift) => {
-          const validationSummary = validationSummaryByShiftId.get(shift.id) || {
-            assignedCount: 0,
-            assignedStrengthScore: 0,
-            meetsStrengthTarget: false,
-            uncoveredSlots: Number(shift.required_waiters),
-          };
+          const roleGroups = SCHEDULE_JOB_ROLES.map((roleConfig) => {
+            const summary =
+              validationSummaryByShiftAndRole.get(
+                `${shift.id}:${roleConfig.jobRole}`
+              ) || {
+                assignedCount: 0,
+                assignedStrengthScore: 0,
+                requiredStrengthScore: 0,
+                meetsStrengthTarget: false,
+                uncoveredSlots: getRequiredCount(shift, roleConfig),
+              };
+            const roleGroup = {
+              jobRole: roleConfig.jobRole,
+              label: roleConfig.label,
+              requiredCount: getRequiredCount(shift, roleConfig),
+              assignedCount: Number(summary.assignedCount),
+              assignedWorkers: buildAssignedWorkersForRole(
+                shift.id,
+                roleConfig.jobRole,
+                assignmentsByShiftAndRole,
+                employeeById,
+                assignedShiftCountByEmployee,
+                requestedShiftCountByEmployee,
+                includeManagerMetrics
+              ),
+            };
+
+            if (includeManagerMetrics) {
+              roleGroup.requestedCount =
+                requestedCountByShiftAndRole.get(
+                  `${shift.id}:${roleConfig.jobRole}`
+                ) || 0;
+              roleGroup.uncoveredSlots = Number(summary.uncoveredSlots);
+              roleGroup.requiredStrengthScore = roundScore(
+                summary.requiredStrengthScore
+              );
+              roleGroup.assignedStrengthScore = roundScore(
+                summary.assignedStrengthScore
+              );
+              roleGroup.meetsStrengthTarget = Boolean(
+                summary.meetsStrengthTarget
+              );
+            }
+
+            return roleGroup;
+          });
 
           return {
             shiftId: shift.id,
             shiftType: shift.shift_type,
-            requiredWaiters: Number(shift.required_waiters),
-            assignedCount: Number(validationSummary.assignedCount),
-            requestedCount: requestedCountByShiftId.get(shift.id) || 0,
-            uncoveredSlots: Number(validationSummary.uncoveredSlots),
-            requiredStrengthScore: roundScore(shift.required_strength_score),
-            assignedStrengthScore: roundScore(
-              validationSummary.assignedStrengthScore
-            ),
-            meetsStrengthTarget: Boolean(
-              validationSummary.meetsStrengthTarget
-            ),
-            assignedWorkers: buildAssignedWorkersForShift(
-              shift.id,
-              assignmentsByShiftId,
-              employeeById,
-              assignedShiftCountByEmployee,
-              requestedShiftCountByEmployee
-            ),
+            roleGroups,
           };
         });
 
@@ -192,30 +212,44 @@ function buildScheduleBoardResponse(scheduleInputs, algorithmResult) {
     }
   );
 
-  const allShifts = days.flatMap((day) => day.shifts);
-
-  return {
+  const allRoleGroups = days.flatMap((day) =>
+    day.shifts.flatMap((shift) => shift.roleGroups)
+  );
+  const response = {
+    scheduleId: options.scheduleId || null,
     weekStartDate: scheduleInputs.weekStartDate,
     weekEndDate: scheduleInputs.weekEndDate,
     generatedAt: new Date().toISOString(),
-    // נתוני הסיכום מזינים את כרטיסי המדדים שמעל הלוח.
-    summary: {
-      totalShifts: allShifts.length,
-      fullyCoveredShifts: allShifts.filter(
-        (shift) => shift.uncoveredSlots === 0
-      ).length,
-      underCoveredShifts: allShifts.filter(
-        (shift) => shift.uncoveredSlots > 0
-      ).length,
-      meetsStrengthTargetShifts: allShifts.filter(
-        (shift) => shift.meetsStrengthTarget
-      ).length,
-      belowStrengthTargetShifts: allShifts.filter(
-        (shift) => !shift.meetsStrengthTarget
-      ).length,
-    },
+    canEdit:
+      options.permissionRole === PERMISSION_ROLES.MANAGER ||
+      options.permissionRole === PERMISSION_ROLES.SHIFT_LEADER,
+    canManage: options.permissionRole === PERMISSION_ROLES.MANAGER,
     days,
   };
+
+  if (includeManagerMetrics) {
+    response.summary = {
+      totalShifts: days.flatMap((day) => day.shifts).length,
+      totalRoleRequirements: allRoleGroups.reduce(
+        (total, roleGroup) => total + roleGroup.requiredCount,
+        0
+      ),
+      fullyCoveredRoleGroups: allRoleGroups.filter(
+        (roleGroup) => roleGroup.uncoveredSlots === 0
+      ).length,
+      underCoveredRoleGroups: allRoleGroups.filter(
+        (roleGroup) => roleGroup.uncoveredSlots > 0
+      ).length,
+      meetsStrengthTargetRoleGroups: allRoleGroups.filter(
+        (roleGroup) => roleGroup.meetsStrengthTarget
+      ).length,
+      belowStrengthTargetRoleGroups: allRoleGroups.filter(
+        (roleGroup) => !roleGroup.meetsStrengthTarget
+      ).length,
+    };
+  }
+
+  return response;
 }
 
 module.exports = {

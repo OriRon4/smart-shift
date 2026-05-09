@@ -1,0 +1,33 @@
+<div class="app-shell">
+  <aside class="app-shell__sidebar">
+    <div class="app-shell__brand">
+      <strong>Smart-Shift</strong>
+      <span>Scheduling</span>
+    </div>
+
+    <nav class="app-shell__nav" aria-label="Primary navigation">
+      <a routerLink="/dashboard" routerLinkActive="app-shell__nav-link--active" class="app-shell__nav-link">
+        <span>Dashboard</span>
+      </a>
+      <a routerLink="/schedule" routerLinkActive="app-shell__nav-link--active" class="app-shell__nav-link">
+        <span>Schedule</span>
+      </a>
+      <a routerLink="/employees" routerLinkActive="app-shell__nav-link--active" class="app-shell__nav-link">
+        <span>Employees</span>
+      </a>
+      <a routerLink="/availability" routerLinkActive="app-shell__nav-link--active" class="app-shell__nav-link">
+        <span>Availability</span>
+      </a>
+    </nav>
+
+    <div class="app-shell__user">
+      <strong>{{ currentUser()?.displayName }}</strong>
+      <span>{{ formatRole(currentUser()?.permissionRole) }}</span>
+      <button type="button" (click)="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <section class="app-shell__content">
+    <router-outlet />
+  </section>
+</div>

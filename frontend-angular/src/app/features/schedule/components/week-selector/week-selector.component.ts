@@ -10,6 +10,7 @@ export class WeekSelectorComponent {
   // הרכיב רק מדווח על פעולות המשתמש; העמוד מחזיק את המצב.
   @Input({ required: true }) weekRangeLabel = '';
   @Input() isLoading = false;
+  @Input() canGenerate = false;
 
   @Output() previousWeek = new EventEmitter<void>();
   @Output() nextWeek = new EventEmitter<void>();
