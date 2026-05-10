@@ -10,6 +10,7 @@ import {
   JobRole,
   SaveScheduleAssignment,
   ScheduleBoardResponse,
+  ScheduleShift,
   ScheduleValidationResponse
 } from '../../models/schedule.models';
 import { ScheduleApiService } from '../../services/schedule-api.service';
@@ -38,6 +39,8 @@ export class ScheduleBoardComponent implements OnInit {
   protected isLoading = false;
   protected errorMessage = '';
   protected successMessage = '';
+  protected boardFilter: 'all' | 'issues' | 'strength' = 'all';
+  protected focusedShiftId: number | null = null;
 
   protected readonly currentUser = this.authService.currentUser;
 
@@ -141,6 +144,274 @@ export class ScheduleBoardComponent implements OnInit {
         ).length,
       0
     );
+  }
+
+  protected get scheduleStatusValue(): string {
+    if (!this.board) {
+      return 'Draft';
+    }
+
+    if (this.board.scheduleId && this.unfilledSlots === 0 && this.belowStrengthShiftCount === 0) {
+      return 'Published';
+    }
+
+    if (this.unfilledSlots > 0) {
+      return 'Missing assignments';
+    }
+
+    if (this.belowStrengthShiftCount > 0) {
+      return 'Needs review';
+    }
+
+    return 'Ready to publish';
+  }
+
+  protected get scheduleStatusTone(): string {
+    if (!this.board) {
+      return 'neutral';
+    }
+
+    if (this.unfilledSlots > 0) {
+      return 'critical';
+    }
+
+    if (this.belowStrengthShiftCount > 0) {
+      return 'warning';
+    }
+
+    return 'good';
+  }
+
+  protected get scheduleStatusHelper(): string {
+    if (!this.board) {
+      return 'No schedule generated yet';
+    }
+
+    const attentionCount = this.getProblemShiftIds('issues').size;
+
+    if (attentionCount > 0) {
+      return `${attentionCount} shifts need attention`;
+    }
+
+    return 'All required slots are filled';
+  }
+
+  protected get openIssueCount(): number {
+    return this.unfilledSlots + this.belowStrengthShiftCount;
+  }
+
+  protected get openIssuesHelper(): string {
+    if (!this.openIssueCount) {
+      return 'No critical issues';
+    }
+
+    const parts: string[] = [];
+
+    if (this.unfilledSlots) {
+      parts.push(`${this.unfilledSlots} unfilled slot${this.unfilledSlots === 1 ? '' : 's'}`);
+    }
+
+    if (this.belowStrengthShiftCount) {
+      parts.push(`${this.belowStrengthShiftCount} below strength`);
+    }
+
+    return parts.join(', ');
+  }
+
+  protected get coverageQualityHelper(): string {
+    const required = this.board?.summary?.totalRoleRequirements || 0;
+    return `${this.totalAssignedEmployees} of ${required} required assignments filled`;
+  }
+
+  protected get strengthRiskValue(): string {
+    if (this.belowStrengthShiftCount === 0) {
+      return 'Low';
+    }
+
+    if (this.belowStrengthShiftCount <= 3) {
+      return 'Medium';
+    }
+
+    return 'High';
+  }
+
+  protected get strengthRiskTone(): string {
+    if (this.belowStrengthShiftCount === 0) {
+      return 'good';
+    }
+
+    if (this.belowStrengthShiftCount <= 3) {
+      return 'warning';
+    }
+
+    return 'critical';
+  }
+
+  protected get strengthRiskHelper(): string {
+    if (!this.belowStrengthShiftCount) {
+      return 'All shifts meet strength target';
+    }
+
+    return `${this.belowStrengthShiftCount} shifts below required strength`;
+  }
+
+  protected get fairnessGap(): number {
+    const assignedCounts = this.getAssignedCountsByEmployee();
+    const counts = [...assignedCounts.values()];
+
+    if (!counts.length) {
+      return 0;
+    }
+
+    return Math.max(...counts) - Math.min(...counts);
+  }
+
+  protected get fairnessBalanceValue(): string {
+    if (this.fairnessGap <= 1) {
+      return 'Balanced';
+    }
+
+    if (this.fairnessGap <= 2) {
+      return 'Slightly uneven';
+    }
+
+    return 'Uneven';
+  }
+
+  protected get fairnessBalanceTone(): string {
+    if (this.fairnessGap <= 1) {
+      return 'good';
+    }
+
+    if (this.fairnessGap <= 2) {
+      return 'warning';
+    }
+
+    return 'critical';
+  }
+
+  protected get fairnessBalanceHelper(): string {
+    if (!this.board) {
+      return 'No assignments yet';
+    }
+
+    if (this.fairnessGap <= 1) {
+      return 'Assignments are balanced';
+    }
+
+    return `Max gap: ${this.fairnessGap} shifts between employees`;
+  }
+
+  protected get mostCriticalShiftValue(): string {
+    const criticalShift = this.mostCriticalShift;
+    return criticalShift?.label || 'No critical shifts';
+  }
+
+  protected get mostCriticalShiftHelper(): string {
+    const criticalShift = this.mostCriticalShift;
+    return criticalShift?.helper || 'All shifts look good';
+  }
+
+  protected get mostCriticalShiftTone(): string {
+    const criticalShift = this.mostCriticalShift;
+
+    if (!criticalShift) {
+      return 'good';
+    }
+
+    return criticalShift.unfilledSlots > 0 ? 'critical' : 'warning';
+  }
+
+  protected get mostCriticalShift(): {
+    shiftId: number;
+    label: string;
+    helper: string;
+    unfilledSlots: number;
+    strengthGap: number;
+  } | null {
+    if (!this.board) {
+      return null;
+    }
+
+    const candidates = this.board.days.flatMap((day) =>
+      day.shifts.map((shift) => {
+        const unfilledSlots = shift.roleGroups.reduce(
+          (total, roleGroup) => total + (roleGroup.uncoveredSlots || 0),
+          0
+        );
+        const strengthGap = shift.roleGroups.reduce(
+          (maxGap, roleGroup) =>
+            Math.max(
+              maxGap,
+              Math.max(
+                0,
+                (roleGroup.requiredStrengthScore || 0) -
+                  (roleGroup.assignedStrengthScore || 0)
+              )
+            ),
+          0
+        );
+
+        return {
+          shiftId: shift.shiftId,
+          label: `${day.dayName} ${this.formatShiftType(shift)}`,
+          helper:
+            unfilledSlots > 0
+              ? `${unfilledSlots} missing assignment${unfilledSlots === 1 ? '' : 's'}`
+              : `Strength gap: ${Number(strengthGap.toFixed(1))}`,
+          unfilledSlots,
+          strengthGap,
+        };
+      })
+    );
+
+    const missingAssignments = candidates
+      .filter((candidate) => candidate.unfilledSlots > 0)
+      .sort((left, right) => right.unfilledSlots - left.unfilledSlots);
+
+    if (missingAssignments.length) {
+      return missingAssignments[0];
+    }
+
+    const strengthRisks = candidates
+      .filter((candidate) => candidate.strengthGap > 0)
+      .sort((left, right) => right.strengthGap - left.strengthGap);
+
+    return strengthRisks[0] || null;
+  }
+
+  protected setBoardFilter(filter: 'all' | 'issues' | 'strength'): void {
+    this.boardFilter = this.boardFilter === filter ? 'all' : filter;
+    this.focusedShiftId = null;
+  }
+
+  protected focusMostCriticalShift(): void {
+    const criticalShift = this.mostCriticalShift;
+
+    if (!criticalShift) {
+      this.boardFilter = 'all';
+      this.focusedShiftId = null;
+      return;
+    }
+
+    this.boardFilter = 'all';
+    this.focusedShiftId = criticalShift.shiftId;
+  }
+
+  protected get activeShiftIds(): Set<number> {
+    if (this.focusedShiftId) {
+      return new Set([this.focusedShiftId]);
+    }
+
+    if (this.boardFilter === 'issues') {
+      return this.getProblemShiftIds('issues');
+    }
+
+    if (this.boardFilter === 'strength') {
+      return this.getProblemShiftIds('strength');
+    }
+
+    return new Set<number>();
   }
 
   protected previousWeek(): void {
@@ -323,6 +594,61 @@ export class ScheduleBoardComponent implements OnInit {
         )
       )
     );
+  }
+
+  private getAssignedCountsByEmployee(): Map<number, number> {
+    const assignedCounts = new Map<number, number>();
+
+    if (!this.board) {
+      return assignedCounts;
+    }
+
+    for (const day of this.board.days) {
+      for (const shift of day.shifts) {
+        for (const roleGroup of shift.roleGroups) {
+          for (const worker of roleGroup.assignedWorkers) {
+            assignedCounts.set(
+              worker.employeeId,
+              (assignedCounts.get(worker.employeeId) || 0) + 1
+            );
+          }
+        }
+      }
+    }
+
+    return assignedCounts;
+  }
+
+  private getProblemShiftIds(filter: 'issues' | 'strength'): Set<number> {
+    const problemShiftIds = new Set<number>();
+
+    if (!this.board) {
+      return problemShiftIds;
+    }
+
+    for (const day of this.board.days) {
+      for (const shift of day.shifts) {
+        const hasUnfilledSlot = shift.roleGroups.some(
+          (roleGroup) => (roleGroup.uncoveredSlots || 0) > 0
+        );
+        const hasStrengthRisk = shift.roleGroups.some(
+          (roleGroup) => roleGroup.meetsStrengthTarget === false
+        );
+
+        if (
+          (filter === 'issues' && (hasUnfilledSlot || hasStrengthRisk)) ||
+          (filter === 'strength' && hasStrengthRisk)
+        ) {
+          problemShiftIds.add(shift.shiftId);
+        }
+      }
+    }
+
+    return problemShiftIds;
+  }
+
+  private formatShiftType(shift: ScheduleShift): string {
+    return shift.shiftType.charAt(0).toUpperCase() + shift.shiftType.slice(1);
   }
 
   private changeSelectedWeek(dayOffset: number): void {

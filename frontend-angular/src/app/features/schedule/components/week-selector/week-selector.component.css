@@ -1,13 +1,13 @@
 .week-selector {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 7px;
   flex-wrap: wrap;
 }
 
 .week-selector__icon-button,
 .week-selector__generate-button {
-  min-height: 42px;
+  min-height: 34px;
   border-radius: 12px;
   cursor: pointer;
   font: inherit;
@@ -15,7 +15,7 @@
 }
 
 .week-selector__icon-button {
-  width: 42px;
+  width: 34px;
   border: 1px solid #c7d2df;
   background: #ffffff;
   color: #173247;
@@ -24,30 +24,31 @@
 .week-selector__range {
   display: grid;
   gap: 3px;
-  min-width: 220px;
+  min-width: 190px;
   border: 1px solid #d9e1eb;
   border-radius: 14px;
   background: #f8fafc;
-  padding: 9px 12px;
+  padding: 6px 9px;
 }
 
 .week-selector__label {
   color: #66778a;
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .week-selector__range strong {
   color: #172331;
-  font-size: 0.92rem;
+  font-size: 0.8rem;
 }
 
 .week-selector__generate-button {
   border: 0;
   background: #1d6f8f;
   color: #ffffff;
-  padding: 0 16px;
+  padding: 0 12px;
+  font-size: 0.82rem;
   box-shadow: 0 12px 28px rgba(29, 111, 143, 0.22);
 }
 

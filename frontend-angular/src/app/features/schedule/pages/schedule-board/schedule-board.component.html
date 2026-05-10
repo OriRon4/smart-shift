@@ -1,128 +1,185 @@
 <main class="schedule-board">
-  <section class="schedule-hero">
-    <div>
-      <span class="schedule-hero__eyebrow">Weekly operations</span>
-      <h1>Schedule Board</h1>
-      <p>Review the week by day, shift, and role. Managers can generate, validate, save, and replace assignments.</p>
-    </div>
-
-    <app-week-selector
-      [weekRangeLabel]="weekRangeLabel"
-      [isLoading]="isLoading"
-      [canGenerate]="canManageSchedule()"
-      (previousWeek)="previousWeek()"
-      (nextWeek)="nextWeek()"
-      (generateSchedule)="generateSchedule()"
-    />
-  </section>
-
-  <section class="schedule-command-bar">
-    <div>
-      <strong>{{ weekRangeLabel }}</strong>
-      <span>
-        @if (board?.scheduleId) {
-          Published schedule #{{ board?.scheduleId }}
-        } @else {
-          No published schedule
-        }
-      </span>
-    </div>
-
-    @if (canManageSchedule()) {
-      <div class="schedule-board__manager-actions">
-        <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="validateSchedule()">
-          Validate schedule
-        </button>
-        <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="saveChanges()">
-          Save changes
-        </button>
+  <section class="schedule-top">
+    <section class="schedule-hero">
+      <div>
+        <span class="schedule-hero__eyebrow">Weekly operations</span>
+        <h1>Schedule Board</h1>
+        <p>Review the week by day, shift, and role. Managers can generate, validate, save, and replace assignments.</p>
       </div>
+
+      <app-week-selector
+        [weekRangeLabel]="weekRangeLabel"
+        [isLoading]="isLoading"
+        [canGenerate]="canManageSchedule()"
+        (previousWeek)="previousWeek()"
+        (nextWeek)="nextWeek()"
+        (generateSchedule)="generateSchedule()"
+      />
+    </section>
+
+    <section class="schedule-command-bar">
+      <div>
+        <strong>{{ weekRangeLabel }}</strong>
+        <span>
+          @if (board?.scheduleId) {
+            Published schedule #{{ board?.scheduleId }}
+          } @else {
+            No published schedule
+          }
+        </span>
+      </div>
+
+      @if (canManageSchedule()) {
+        <div class="schedule-board__manager-actions">
+          <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="validateSchedule()">
+            Validate schedule
+          </button>
+          <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="saveChanges()">
+            Save changes
+          </button>
+        </div>
+      }
+    </section>
+
+    @if (successMessage) {
+      <section class="schedule-board__notice schedule-board__notice--success">
+        {{ successMessage }}
+      </section>
+    }
+
+    @if (board?.summary && canManageSchedule()) {
+      <section class="schedule-board__summary-cards" aria-label="Schedule summary">
+        <button
+          type="button"
+          class="kpi-card"
+          [class.kpi-card--good]="scheduleStatusTone === 'good'"
+          [class.kpi-card--warning]="scheduleStatusTone === 'warning'"
+          [class.kpi-card--critical]="scheduleStatusTone === 'critical'"
+          (click)="setBoardFilter('issues')"
+        >
+          <span class="kpi-card__label">Schedule Status</span>
+          <strong>{{ scheduleStatusValue }}</strong>
+          <small>{{ scheduleStatusHelper }}</small>
+        </button>
+
+        <button
+          type="button"
+          class="kpi-card"
+          [class.kpi-card--critical]="unfilledSlots > 0"
+          [class.kpi-card--warning]="unfilledSlots === 0 && openIssueCount > 0"
+          [class.kpi-card--active]="boardFilter === 'issues'"
+          (click)="setBoardFilter('issues')"
+        >
+          <span class="kpi-card__label">Open Issues</span>
+          <strong>{{ openIssueCount }}</strong>
+          <small>{{ openIssuesHelper }}</small>
+        </button>
+
+        <article class="kpi-card">
+          <span class="kpi-card__label">Coverage Quality</span>
+          <strong>{{ coveragePercent }}%</strong>
+          <small>{{ coverageQualityHelper }}</small>
+        </article>
+
+        <button
+          type="button"
+          class="kpi-card"
+          [class.kpi-card--good]="strengthRiskTone === 'good'"
+          [class.kpi-card--warning]="strengthRiskTone === 'warning'"
+          [class.kpi-card--critical]="strengthRiskTone === 'critical'"
+          [class.kpi-card--active]="boardFilter === 'strength'"
+          (click)="setBoardFilter('strength')"
+        >
+          <span class="kpi-card__label">Strength Risk</span>
+          <strong>{{ strengthRiskValue }}</strong>
+          <small>{{ strengthRiskHelper }}</small>
+        </button>
+
+        <article
+          class="kpi-card"
+          [class.kpi-card--good]="fairnessBalanceTone === 'good'"
+          [class.kpi-card--warning]="fairnessBalanceTone === 'warning'"
+          [class.kpi-card--critical]="fairnessBalanceTone === 'critical'"
+        >
+          <span class="kpi-card__label">Fairness Balance</span>
+          <strong>{{ fairnessBalanceValue }}</strong>
+          <small>{{ fairnessBalanceHelper }}</small>
+        </article>
+
+        <button
+          type="button"
+          class="kpi-card"
+          [class.kpi-card--good]="mostCriticalShiftTone === 'good'"
+          [class.kpi-card--warning]="mostCriticalShiftTone === 'warning'"
+          [class.kpi-card--critical]="mostCriticalShiftTone === 'critical'"
+          [class.kpi-card--active]="!!focusedShiftId"
+          (click)="focusMostCriticalShift()"
+        >
+          <span class="kpi-card__label">Most Critical Shift</span>
+          <strong>{{ mostCriticalShiftValue }}</strong>
+          <small>{{ mostCriticalShiftHelper }}</small>
+        </button>
+      </section>
+    }
+
+    @if (pendingReplacement) {
+      <section class="replacement-panel">
+        <div>
+          <span>Manual replacement</span>
+          <strong>{{ pendingReplacement.employeeName }}</strong>
+        </div>
+
+        <select name="replacement" [value]="selectedReplacementEmployeeId || ''" (change)="updateSelectedReplacement($event)">
+          <option value="">Choose replacement</option>
+          @for (employee of getReplacementCandidates(); track employee.id) {
+            <option [value]="employee.id">{{ employee.fullName }}</option>
+          }
+        </select>
+
+        <button type="button" [disabled]="!selectedReplacementEmployeeId" (click)="applyReplacement()">
+          Stage replacement
+        </button>
+      </section>
+    }
+
+    @if (validationResult && canManageSchedule()) {
+      <section class="schedule-board__notice">
+        <strong>{{ validationResult.message }}</strong>
+        <span>{{ validationResult.warnings.length }} warnings found.</span>
+      </section>
     }
   </section>
 
-  @if (successMessage) {
-    <section class="schedule-board__notice schedule-board__notice--success">
-      {{ successMessage }}
-    </section>
-  }
-
-  @if (board?.summary && canManageSchedule()) {
-    <section class="schedule-board__summary-cards" aria-label="Schedule summary">
-      <article>
-        <span>Below strength shifts</span>
-        <strong>{{ belowStrengthShiftCount }}</strong>
-      </article>
-
-      <article class="schedule-board__summary-card--danger">
-        <span>Unfilled slots</span>
-        <strong>{{ unfilledSlots }}</strong>
-      </article>
-
-      <article>
-        <span>Assignments</span>
-        <strong>{{ totalAssignedEmployees }}/{{ board?.summary?.totalRoleRequirements }}</strong>
-      </article>
-
-      <article>
-        <span>Coverage</span>
-        <strong>{{ coveragePercent }}%</strong>
-      </article>
-    </section>
-  }
-
-  @if (pendingReplacement) {
-    <section class="replacement-panel">
-      <div>
-        <span>Manual replacement</span>
-        <strong>{{ pendingReplacement.employeeName }}</strong>
-      </div>
-
-      <select name="replacement" [value]="selectedReplacementEmployeeId || ''" (change)="updateSelectedReplacement($event)">
-        <option value="">Choose replacement</option>
-        @for (employee of getReplacementCandidates(); track employee.id) {
-          <option [value]="employee.id">{{ employee.fullName }}</option>
-        }
-      </select>
-
-      <button type="button" [disabled]="!selectedReplacementEmployeeId" (click)="applyReplacement()">
-        Stage replacement
-      </button>
-    </section>
-  }
-
-  @if (validationResult && canManageSchedule()) {
-    <section class="schedule-board__notice">
-      <strong>{{ validationResult.message }}</strong>
-      <span>{{ validationResult.warnings.length }} warnings found.</span>
-    </section>
-  }
-
-  @if (isLoading) {
-    <section class="schedule-board__state" aria-live="polite">
-      <strong>Loading schedule</strong>
-      <p>{{ weekRangeLabel }}</p>
-    </section>
-  } @else if (errorMessage) {
-    <section class="schedule-board__state schedule-board__state--error" aria-live="polite">
-      <strong>Schedule action failed</strong>
-      <p>{{ errorMessage }}</p>
-    </section>
-  } @else if (board) {
-    <app-schedule-grid
-      [board]="board"
-      [canManage]="canManageSchedule()"
-      (replaceAssignment)="openReplacement($event)"
-    />
-  } @else {
-    <section class="schedule-board__state">
-      <strong>No saved schedule yet</strong>
-      <p>
-        @if (canManageSchedule()) {
-          Generate a schedule for this week.
-        } @else {
-          A manager has not published a schedule for this week.
-        }
-      </p>
-    </section>
-  }
+  <section class="schedule-board-panel">
+    @if (isLoading) {
+      <section class="schedule-board__state" aria-live="polite">
+        <strong>Loading schedule</strong>
+        <p>{{ weekRangeLabel }}</p>
+      </section>
+    } @else if (errorMessage) {
+      <section class="schedule-board__state schedule-board__state--error" aria-live="polite">
+        <strong>Schedule action failed</strong>
+        <p>{{ errorMessage }}</p>
+      </section>
+    } @else if (board) {
+      <app-schedule-grid
+        [board]="board"
+        [canManage]="canManageSchedule()"
+        [activeShiftIds]="activeShiftIds"
+        [onlyShowActive]="boardFilter !== 'all'"
+        (replaceAssignment)="openReplacement($event)"
+      />
+    } @else {
+      <section class="schedule-board__state">
+        <strong>No saved schedule yet</strong>
+        <p>
+          @if (canManageSchedule()) {
+            Generate a schedule for this week.
+          } @else {
+            A manager has not published a schedule for this week.
+          }
+        </p>
+      </section>
+    }
+  </section>
 </main>

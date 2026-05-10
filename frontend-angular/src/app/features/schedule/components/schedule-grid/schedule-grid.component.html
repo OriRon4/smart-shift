@@ -1,91 +1,100 @@
 @if (board) {
-  <section class="schedule-grid" aria-label="Weekly schedule board">
-    @for (day of board.days; track day.date) {
-      <article class="day-column">
-        <header class="day-column__header">
-          <span>{{ day.dayName }}</span>
-          <strong>{{ day.date }}</strong>
-        </header>
+  <section class="schedule-grid-shell" aria-label="Weekly schedule board">
+    <div class="schedule-grid-scroll">
+      <section class="schedule-grid">
+        @for (day of board.days; track day.date) {
+          <article class="day-column">
+            <header class="day-column__header">
+              <span>{{ day.dayName }}</span>
+              <strong>{{ day.date }}</strong>
+            </header>
 
-        <div class="day-column__shifts">
-          @for (shift of day.shifts; track shift.shiftId) {
-            <section class="shift-card">
-              <header class="shift-card__header">
-                <h2>{{ formatShiftType(shift) }}</h2>
-              </header>
+            <div class="day-column__shifts">
+              @for (shift of day.shifts; track shift.shiftId) {
+                @if (shouldRenderShift(shift)) {
+                  <section
+                    class="shift-card"
+                    [class.shift-card--morning]="shift.shiftType === 'morning'"
+                    [class.shift-card--evening]="shift.shiftType === 'evening'"
+                    [class.shift-card--highlighted]="isShiftHighlighted(shift)"
+                  >
+                    <header class="shift-card__header">
+                      <span class="shift-card__marker"></span>
+                      <h2>{{ formatShiftType(shift) }}</h2>
+                    </header>
 
-              @for (roleGroup of shift.roleGroups; track roleGroup.jobRole) {
-                <section
-                  class="role-group"
-                  [class.role-group--shift-leader]="roleGroup.jobRole === 'shift_leader'"
-                  [class.role-group--bartender]="roleGroup.jobRole === 'bartender'"
-                  [class.role-group--waiter]="roleGroup.jobRole === 'waiter'"
-                  [class.role-group--optimal]="getRoleGroupStatus(roleGroup) === 'optimal'"
-                  [class.role-group--covered]="getRoleGroupStatus(roleGroup) === 'covered'"
-                  [class.role-group--understaffed]="getRoleGroupStatus(roleGroup) === 'understaffed'"
-                >
-                  <header class="role-group__header">
-                    <div>
-                      <h3>{{ roleGroup.label }}</h3>
-                      <p>{{ roleGroup.assignedCount }}/{{ roleGroup.requiredCount }} assigned</p>
-                    </div>
-
-                    <span>{{ getRoleGroupStatusLabel(roleGroup) }}</span>
-                  </header>
-
-                  @if (roleGroup.requestedCount !== undefined) {
-                    <p class="role-group__metric">
-                      {{ roleGroup.requestedCount }} available submissions
-                    </p>
-                  }
-
-                  <div class="worker-list">
-                    @for (worker of roleGroup.assignedWorkers; track worker.employeeId) {
-                      <button
-                        class="worker-row"
-                        type="button"
-                        [disabled]="!canManage"
-                        (click)="requestReplacement(shift, roleGroup, worker)"
+                    @for (roleGroup of shift.roleGroups; track roleGroup.jobRole) {
+                      <section
+                        class="role-group"
+                        [class.role-group--shift-leader]="roleGroup.jobRole === 'shift_leader'"
+                        [class.role-group--bartender]="roleGroup.jobRole === 'bartender'"
+                        [class.role-group--waiter]="roleGroup.jobRole === 'waiter'"
+                        [class.role-group--optimal]="getRoleGroupStatus(roleGroup) === 'optimal'"
+                        [class.role-group--covered]="getRoleGroupStatus(roleGroup) === 'covered'"
+                        [class.role-group--understaffed]="getRoleGroupStatus(roleGroup) === 'understaffed'"
                       >
-                        <span class="worker-row__avatar">
-                          {{ getWorkerInitials(worker) }}
-                        </span>
+                        <header class="role-group__header">
+                          <div>
+                            <h3>{{ roleGroup.label }}</h3>
+                            <p>{{ roleGroup.assignedCount }}/{{ roleGroup.requiredCount }}</p>
+                          </div>
 
-                        <span class="worker-row__body">
-                          <span class="worker-row__main">
-                            <strong>{{ worker.fullName }}</strong>
-                            <span>{{ formatJobRole(worker.jobRole) }}</span>
-                          </span>
+                          <span>{{ getRoleGroupStatusLabel(roleGroup) }}</span>
+                        </header>
 
-                          @if (worker.strengthScore !== undefined) {
-                            <span class="worker-row__metrics">
-                              Strength {{ worker.strengthScore }} |
-                              {{ worker.assignedShiftCount }}/{{ worker.requestedShiftCount }} shifts
-                            </span>
+                        @if (roleGroup.requestedCount !== undefined) {
+                          <p class="role-group__metric">
+                            {{ roleGroup.requestedCount }} available
+                          </p>
+                        }
+
+                        <div class="worker-list">
+                          @for (worker of roleGroup.assignedWorkers; track worker.employeeId) {
+                            <button
+                              class="worker-row"
+                              type="button"
+                              [disabled]="!canManage"
+                              (click)="requestReplacement(shift, roleGroup, worker)"
+                            >
+                              <span class="worker-row__avatar">
+                                {{ getWorkerInitials(worker) }}
+                              </span>
+
+                              <span class="worker-row__body">
+                                <span class="worker-row__main">
+                                  <strong>{{ worker.fullName }}</strong>
+                                  <span>{{ formatJobRole(worker.jobRole) }}</span>
+                                </span>
+
+                                @if (worker.strengthScore !== undefined) {
+                                  <span class="worker-row__metrics">
+                                    Str {{ worker.strengthScore }} |
+                                    {{ worker.assignedShiftCount }}/{{ worker.requestedShiftCount }}
+                                  </span>
+                                }
+                              </span>
+                            </button>
+                          } @empty {
+                            <p class="worker-list__empty">No employees assigned.</p>
                           }
-                        </span>
-                      </button>
-                    } @empty {
-                      <p class="worker-list__empty">No employees assigned.</p>
-                    }
-                  </div>
+                        </div>
 
-                  @if (roleGroup.assignedStrengthScore !== undefined) {
-                    <footer class="role-group__footer">
-                      Strength:
-                      <strong>{{ roleGroup.assignedStrengthScore }}</strong>
-                      /
-                      <span>{{ roleGroup.requiredStrengthScore }} required</span>
-                    </footer>
-                  }
-                </section>
+                        @if (roleGroup.assignedStrengthScore !== undefined) {
+                          <footer class="role-group__footer">
+                            Strength <strong>{{ roleGroup.assignedStrengthScore }}</strong>/<span>{{ roleGroup.requiredStrengthScore }}</span>
+                          </footer>
+                        }
+                      </section>
+                    }
+                  </section>
+                }
+              } @empty {
+                <p class="day-column__empty">No shifts for this day.</p>
               }
-            </section>
-          } @empty {
-            <p class="day-column__empty">No shifts for this day.</p>
-          }
-        </div>
-      </article>
-    }
+            </div>
+          </article>
+        }
+      </section>
+    </div>
   </section>
 }

@@ -26,6 +26,8 @@ export interface ReplaceAssignmentRequest {
 export class ScheduleGridComponent {
   @Input({ required: true }) board: ScheduleBoardResponse | null = null;
   @Input() canManage = false;
+  @Input() activeShiftIds = new Set<number>();
+  @Input() onlyShowActive = false;
 
   @Output() replaceAssignment = new EventEmitter<ReplaceAssignmentRequest>();
 
@@ -73,6 +75,14 @@ export class ScheduleGridComponent {
 
   formatShiftType(shift: ScheduleShift): string {
     return shift.shiftType.charAt(0).toUpperCase() + shift.shiftType.slice(1);
+  }
+
+  shouldRenderShift(shift: ScheduleShift): boolean {
+    return !this.onlyShowActive || this.activeShiftIds.has(shift.shiftId);
+  }
+
+  isShiftHighlighted(shift: ScheduleShift): boolean {
+    return this.activeShiftIds.has(shift.shiftId);
   }
 
   getWorkerInitials(worker: ScheduleWorker): string {
