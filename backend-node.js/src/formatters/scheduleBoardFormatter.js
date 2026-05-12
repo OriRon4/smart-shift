@@ -111,7 +111,10 @@ function buildScheduleBoardResponse(
   const includeManagerMetrics =
     options.permissionRole === PERMISSION_ROLES.MANAGER;
   const employeeById = new Map(
-    scheduleInputs.employees.map((employee) => [employee.id, employee])
+    (scheduleInputs.allEmployees || scheduleInputs.employees).map((employee) => [
+      employee.id,
+      employee,
+    ])
   );
   const shiftsByDate = buildItemsByKey(scheduleInputs.shifts, (shift) =>
     formatDateKey(shift.shift_date)
@@ -219,6 +222,7 @@ function buildScheduleBoardResponse(
     scheduleId: options.scheduleId || null,
     weekStartDate: scheduleInputs.weekStartDate,
     weekEndDate: scheduleInputs.weekEndDate,
+    publishedAt: options.publishedAt || null,
     generatedAt: new Date().toISOString(),
     canEdit:
       options.permissionRole === PERMISSION_ROLES.MANAGER ||

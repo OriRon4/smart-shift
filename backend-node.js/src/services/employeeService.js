@@ -86,8 +86,19 @@ async function updateEmployee(employeeId, body) {
   return employeeRepository.updateEmployee(employeeId, employeeUpdate);
 }
 
+async function deactivateEmployee(employeeId) {
+  const existingEmployee = await employeeRepository.getEmployeeById(employeeId);
+
+  if (!existingEmployee) {
+    throw createHttpError(404, "Employee not found");
+  }
+
+  return employeeRepository.deactivateEmployee(employeeId);
+}
+
 module.exports = {
   getEmployeesForUser,
   getEmployeeByIdForUser,
   updateEmployee,
+  deactivateEmployee,
 };

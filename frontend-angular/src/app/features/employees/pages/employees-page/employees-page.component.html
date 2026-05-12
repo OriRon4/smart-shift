@@ -136,7 +136,58 @@
         </label>
 
         @if (canEdit()) {
+          <section class="employee-availability">
+            <header class="employee-availability__header">
+              <div>
+                <span>Availability</span>
+                <strong>{{ availabilityWeekStartDate }}</strong>
+              </div>
+              <div>
+                <button type="button" (click)="previousAvailabilityWeek()" [disabled]="isAvailabilityLoading">&lt;</button>
+                <button type="button" (click)="nextAvailabilityWeek()" [disabled]="isAvailabilityLoading">&gt;</button>
+              </div>
+            </header>
+
+            @if (employeeAvailability) {
+              <div class="employee-availability__grid">
+                @for (day of employeeAvailability.days; track day.date) {
+                  <section class="employee-availability__day">
+                    <strong>{{ day.dayName }}</strong>
+                    @for (shift of day.shifts; track shift.shiftId) {
+                      <button
+                        type="button"
+                        [class.employee-availability__shift--selected]="isEmployeeAvailabilitySelected(shift.shiftId)"
+                        (click)="toggleEmployeeAvailabilityShift(shift.shiftId)"
+                        [disabled]="isAvailabilityLoading"
+                      >
+                        {{ formatAvailabilityShiftType(shift.shiftType) }}
+                      </button>
+                    }
+                  </section>
+                }
+              </div>
+            } @else {
+              <p class="employee-availability__empty">
+                Availability will load after selecting an employee.
+              </p>
+            }
+
+            <button type="button" (click)="saveEmployeeAvailability()" [disabled]="isAvailabilityLoading || !employeeAvailability">
+              Save availability
+            </button>
+          </section>
+        }
+
+        @if (canEdit()) {
           <button type="submit" [disabled]="isLoading">Save employee</button>
+          <button
+            type="button"
+            class="employee-card__deactivate"
+            [disabled]="isLoading || editableEmployee.isActive === false"
+            (click)="deactivateEmployee()"
+          >
+            Deactivate employee
+          </button>
         }
       </form>
     } @else if (!canViewDetails()) {

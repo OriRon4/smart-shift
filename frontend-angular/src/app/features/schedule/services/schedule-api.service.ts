@@ -52,4 +52,17 @@ export class ScheduleApiService {
       }
     );
   }
+
+  clearScheduleAssignments(scheduleId: number): Observable<ScheduleBoardResponse> {
+    return this.http.delete<ScheduleBoardResponse>(
+      `${this.apiUrl}/${scheduleId}/assignments`
+    );
+  }
+
+  publishSchedule(scheduleId: number): Observable<ScheduleBoardResponse> {
+    return this.http.post<ScheduleBoardResponse>(
+      `${this.apiUrl}/${scheduleId}/publish`,
+      {}
+    );
+  }
 }

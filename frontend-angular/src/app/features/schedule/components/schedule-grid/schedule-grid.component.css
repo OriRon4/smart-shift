@@ -3,13 +3,10 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  max-width: 100%;
   border: 1px solid #d9e1eb;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 16px 42px rgba(27, 44, 66, 0.08);
+  border-radius: 16px;
+  background: #f8fafc;
   overflow: hidden;
-  scrollbar-color: #90a4b8 #e8eef5;
 }
 
 .schedule-grid-scroll {
@@ -17,33 +14,39 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  overflow-x: auto;
-  overflow-y: auto;
+  overflow: auto;
   padding: 12px;
   scrollbar-color: #90a4b8 #e8eef5;
 }
 
 .schedule-grid {
   display: grid;
-  grid-template-columns: repeat(7, 248px);
+  grid-template-columns: repeat(7, 282px);
   gap: 12px;
   width: max-content;
+  min-height: 100%;
 }
 
 .day-column {
   min-width: 0;
   border: 1px solid #d9e1eb;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.96);
+  border-radius: 14px;
+  background: #ffffff;
   overflow: hidden;
 }
 
 .day-column__header {
-  display: grid;
-  gap: 2px;
-  padding: 12px 13px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid #d9e1eb;
   background: #172331;
   color: #ffffff;
+  padding: 11px 12px;
 }
 
 .day-column__header span {
@@ -51,8 +54,9 @@
 }
 
 .day-column__header strong {
-  color: #b9c8d8;
-  font-size: 0.78rem;
+  color: #c7d6e2;
+  font-size: 0.76rem;
+  font-weight: 800;
 }
 
 .day-column__shifts {
@@ -70,44 +74,41 @@
 
 .shift-card {
   display: grid;
-  gap: 7px;
+  gap: 10px;
   border: 1px solid #e3e9f0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
-  padding: 9px;
+  padding: 10px;
 }
 
 .shift-card--morning {
-  border-top: 4px solid #d89b28;
-  background: #fffaf0;
+  border-top: 3px solid #d5912b;
 }
 
 .shift-card--evening {
-  border-top: 4px solid #385d96;
-  background: #f3f7ff;
+  border-top: 3px solid #385d96;
 }
 
 .shift-card--highlighted {
-  outline: 3px solid rgba(29, 111, 143, 0.32);
-  box-shadow: 0 0 0 6px rgba(29, 111, 143, 0.08);
+  outline: 2px solid rgba(213, 145, 43, 0.28);
 }
 
 .shift-card__header {
   display: flex;
   gap: 8px;
   align-items: center;
-  border-bottom: 1px solid rgba(23, 35, 49, 0.08);
+  border-bottom: 1px solid #eef2f6;
   padding-bottom: 7px;
 }
 
 .shift-card__marker {
-  width: 8px;
-  height: 22px;
+  width: 7px;
+  height: 20px;
   border-radius: 999px;
 }
 
 .shift-card--morning .shift-card__marker {
-  background: #d89b28;
+  background: #d5912b;
 }
 
 .shift-card--evening .shift-card__marker {
@@ -117,66 +118,68 @@
 .shift-card__header h2 {
   margin: 0;
   color: #172331;
-  font-size: 0.98rem;
+  font-size: 0.96rem;
 }
 
 .role-group {
   display: grid;
-  gap: 5px;
+  gap: 8px;
   border: 1px solid #e3e9f0;
   border-left: 4px solid #8aa0b5;
-  border-radius: 11px;
-  background: #f8fafc;
-  padding: 7px;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 9px;
 }
 
 .role-group--shift-leader {
   border-left-color: #5b5fc7;
-  background: #f3f4ff;
 }
 
 .role-group--bartender {
   border-left-color: #c77700;
-  background: #fff7e8;
 }
 
 .role-group--waiter {
   border-left-color: #1f8a58;
-  background: #eefaf4;
 }
 
 .role-group--understaffed {
-  border-left-color: #c2413b;
+  border-left-color: #d5912b;
+}
+
+.role-group--highlighted {
+  border-color: #d5af63;
+  background: #fffdf6;
+  box-shadow: 0 0 0 2px rgba(213, 145, 43, 0.13);
 }
 
 .role-group__header {
   display: flex;
   justify-content: space-between;
-  gap: 7px;
+  gap: 8px;
+  align-items: flex-start;
 }
 
 .role-group__header h3 {
   margin: 0;
   color: #172331;
-  font-size: 0.82rem;
+  font-size: 0.84rem;
 }
 
-.role-group__header p,
-.role-group__metric,
-.worker-row__metrics {
-  margin: 2px 0 0;
+.role-group__header p {
+  margin: 3px 0 0;
   color: #66778a;
   font-size: 0.7rem;
 }
 
 .role-group__header > span {
-  align-self: flex-start;
+  flex: 0 0 auto;
   border-radius: 999px;
   background: #e8eef5;
   color: #34465b;
   font-size: 0.66rem;
   font-weight: 900;
-  padding: 3px 6px;
+  padding: 3px 7px;
   white-space: nowrap;
 }
 
@@ -191,27 +194,32 @@
 }
 
 .role-group--understaffed .role-group__header > span {
-  background: #fde2df;
-  color: #9d2924;
+  background: #fff1d0;
+  color: #8a5a13;
 }
 
 .worker-list {
   display: grid;
-  gap: 5px;
+  gap: 6px;
 }
 
 .worker-row {
-  display: flex;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
   align-items: center;
   width: 100%;
-  min-height: 34px;
+  min-height: 36px;
   border: 1px solid #e3e9f0;
   border-radius: 9px;
-  background: #ffffff;
+  background: #f8fafc;
   color: inherit;
-  padding: 5px 6px;
+  padding: 5px 7px;
   text-align: left;
+}
+
+.worker-row:has(.worker-row__metrics) {
+  grid-template-columns: 28px minmax(0, 1fr);
 }
 
 .worker-row:not(:disabled) {
@@ -220,8 +228,7 @@
 
 .worker-row:not(:disabled):hover {
   border-color: #1d6f8f;
-  box-shadow: 0 8px 20px rgba(29, 111, 143, 0.12);
-  transform: translateY(-1px);
+  background: #ffffff;
 }
 
 .worker-row:disabled {
@@ -230,9 +237,8 @@
 
 .worker-row__avatar {
   display: grid;
-  flex: 0 0 26px;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   place-items: center;
   border-radius: 8px;
   background: #e2f3ef;
@@ -241,34 +247,26 @@
   font-weight: 900;
 }
 
-.worker-row__body,
-.worker-row__main {
+.worker-row__body {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
   min-width: 0;
 }
 
-.worker-row__main {
-  gap: 1px;
-}
-
-.worker-row__main strong {
+.worker-row__name {
   overflow: hidden;
   color: #172331;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.worker-row__main span {
-  color: #66778a;
-  font-size: 0.62rem;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
 .worker-row__metrics {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: #46596d;
+  font-size: 0.76rem;
+  font-weight: 900;
   white-space: nowrap;
 }
 
@@ -276,9 +274,6 @@
   border-top: 1px solid #e3e9f0;
   color: #66778a;
   font-size: 0.7rem;
-  padding-top: 5px;
-}
-
-.role-group__footer strong {
-  color: #172331;
+  font-weight: 800;
+  padding-top: 6px;
 }

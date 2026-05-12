@@ -3,6 +3,8 @@ import { HttpErrorResponse } from '@angular/common/http';
 
 import { AuthService } from '../../../../core/auth/auth.service';
 import { PermissionService } from '../../../../core/permissions/permission.service';
+import { AvailabilityResponse } from '../../../availability/models/availability.models';
+import { AvailabilityApiService } from '../../../availability/services/availability-api.service';
 import { Employee } from '../../models/employee.models';
 import { EmployeesApiService } from '../../services/employees-api.service';
 
@@ -19,6 +21,10 @@ export class EmployeesPageComponent implements OnInit {
   protected isLoading = false;
   protected errorMessage = '';
   protected successMessage = '';
+  protected availabilityWeekStartDate = '2026-04-19';
+  protected employeeAvailability: AvailabilityResponse | null = null;
+  protected selectedAvailabilityShiftIds = new Set<number>();
+  protected isAvailabilityLoading = false;
   protected readonly currentUser = this.authService.currentUser;
 
   protected readonly jobRoles = [
@@ -30,6 +36,7 @@ export class EmployeesPageComponent implements OnInit {
 
   constructor(
     private readonly employeesApiService: EmployeesApiService,
+    private readonly availabilityApiService: AvailabilityApiService,
     private readonly authService: AuthService,
     private readonly permissionService: PermissionService
   ) {}
@@ -102,6 +109,10 @@ export class EmployeesPageComponent implements OnInit {
         this.selectedEmployee = response.employee;
         this.editableEmployee = { ...response.employee };
         this.isLoading = false;
+
+        if (this.canEdit()) {
+          this.loadEmployeeAvailability();
+        }
       },
       error: (error: unknown) => {
         this.errorMessage = this.resolveErrorMessage(error);
@@ -131,6 +142,39 @@ export class EmployeesPageComponent implements OnInit {
         this.isLoading = false;
       }
     });
+  }
+
+  protected deactivateEmployee(): void {
+    if (!this.editableEmployee || !this.canEdit()) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Are you sure you want to deactivate this employee?\nThis employee will no longer be available for future schedules.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.isLoading = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    this.employeesApiService
+      .deactivateEmployee(this.editableEmployee.id)
+      .subscribe({
+        next: (response) => {
+          this.selectedEmployee = response.employee;
+          this.editableEmployee = { ...response.employee };
+          this.successMessage = 'Employee deactivated.';
+          this.loadEmployees();
+        },
+        error: (error: unknown) => {
+          this.errorMessage = this.resolveErrorMessage(error);
+          this.isLoading = false;
+        }
+      });
   }
 
   protected updateStringField(
@@ -175,6 +219,115 @@ export class EmployeesPageComponent implements OnInit {
       ...this.editableEmployee,
       isActive: (event.target as HTMLInputElement).checked
     };
+  }
+
+  protected previousAvailabilityWeek(): void {
+    this.availabilityWeekStartDate = this.addDays(
+      this.availabilityWeekStartDate,
+      -7
+    );
+    this.loadEmployeeAvailability();
+  }
+
+  protected nextAvailabilityWeek(): void {
+    this.availabilityWeekStartDate = this.addDays(
+      this.availabilityWeekStartDate,
+      7
+    );
+    this.loadEmployeeAvailability();
+  }
+
+  protected isEmployeeAvailabilitySelected(shiftId: number): boolean {
+    return this.selectedAvailabilityShiftIds.has(shiftId);
+  }
+
+  protected toggleEmployeeAvailabilityShift(shiftId: number): void {
+    const updatedShiftIds = new Set(this.selectedAvailabilityShiftIds);
+
+    if (updatedShiftIds.has(shiftId)) {
+      updatedShiftIds.delete(shiftId);
+    } else {
+      updatedShiftIds.add(shiftId);
+    }
+
+    this.selectedAvailabilityShiftIds = updatedShiftIds;
+  }
+
+  protected saveEmployeeAvailability(): void {
+    if (!this.editableEmployee || !this.canEdit()) {
+      return;
+    }
+
+    this.isAvailabilityLoading = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    this.availabilityApiService
+      .updateEmployeeAvailability(
+        this.editableEmployee.id,
+        this.availabilityWeekStartDate,
+        [...this.selectedAvailabilityShiftIds]
+      )
+      .subscribe({
+        next: (availability) => {
+          this.employeeAvailability = availability;
+          this.selectedAvailabilityShiftIds = new Set(
+            availability.selectedShiftIds
+          );
+          this.successMessage = 'Employee availability saved.';
+          this.isAvailabilityLoading = false;
+        },
+        error: (error: unknown) => {
+          this.errorMessage = this.resolveErrorMessage(error);
+          this.isAvailabilityLoading = false;
+        }
+      });
+  }
+
+  protected formatAvailabilityShiftType(shiftType: string): string {
+    return shiftType.charAt(0).toUpperCase() + shiftType.slice(1);
+  }
+
+  private loadEmployeeAvailability(): void {
+    if (!this.editableEmployee || !this.canEdit()) {
+      this.employeeAvailability = null;
+      this.selectedAvailabilityShiftIds = new Set();
+      return;
+    }
+
+    this.isAvailabilityLoading = true;
+
+    this.availabilityApiService
+      .getEmployeeAvailability(
+        this.editableEmployee.id,
+        this.availabilityWeekStartDate
+      )
+      .subscribe({
+        next: (availability) => {
+          this.employeeAvailability = availability;
+          this.selectedAvailabilityShiftIds = new Set(
+            availability.selectedShiftIds
+          );
+          this.isAvailabilityLoading = false;
+        },
+        error: (error: unknown) => {
+          this.errorMessage = this.resolveErrorMessage(error);
+          this.employeeAvailability = null;
+          this.selectedAvailabilityShiftIds = new Set();
+          this.isAvailabilityLoading = false;
+        }
+      });
+  }
+
+  private addDays(dateKey: string, dayOffset: number): string {
+    const date = new Date(`${dateKey}T00:00:00`);
+    date.setDate(date.getDate() + dayOffset);
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
   }
 
   private resolveErrorMessage(error: unknown): string {

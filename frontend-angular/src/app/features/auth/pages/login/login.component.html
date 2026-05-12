@@ -35,102 +35,107 @@
   </section>
 
   <section class="login-panel">
-    <div class="login-panel__header">
-      <span>{{ isRegisterMode ? 'New worker' : 'Welcome back' }}</span>
-      <h2>{{ isRegisterMode ? 'Create worker access' : 'Log in to Smart-Shift' }}</h2>
-      <p>
-        @if (isRegisterMode) {
-          New workers are created as regular employees.
-        } @else {
-          Use a seeded account or create a new worker login.
-        }
-      </p>
-    </div>
-
-    <div class="login-mode">
-      <button type="button" [class.login-mode__active]="!isRegisterMode" (click)="showLogin()">Log in</button>
-      <button type="button" [class.login-mode__active]="isRegisterMode" (click)="showRegister()">New worker</button>
-    </div>
-
-    @if (!isRegisterMode) {
-      <form class="login-form" (submit)="$event.preventDefault(); submit()">
-        <label>
-          Username or email
-          <input
-            type="text"
-            name="login"
-            autocomplete="username"
-            [value]="loginValue"
-            (input)="updateLoginValue($event)"
-            required
-          />
-        </label>
-
-        <label>
-          Password
-          <input
-            type="password"
-            name="password"
-            autocomplete="current-password"
-            [value]="password"
-            (input)="updatePassword($event)"
-            required
-          />
-        </label>
-
-        @if (errorMessage) {
-          <p class="login-form__error">{{ errorMessage }}</p>
-        }
-
-        <button type="submit" [disabled]="isLoading">
-          {{ isLoading ? 'Logging in...' : 'Log in' }}
-        </button>
-      </form>
-
-      <div class="demo-accounts" aria-label="Demo accounts">
-        <button type="button" (click)="useDemoAccount('manager@example.com')">
-          <strong>Manager</strong>
-          <span>manager&#64;example.com</span>
-        </button>
-        <button type="button" (click)="useDemoAccount('leader@example.com')">
-          <strong>Shift manager</strong>
-          <span>leader&#64;example.com</span>
-        </button>
-        <button type="button" (click)="useDemoAccount('employee@example.com')">
-          <strong>Employee</strong>
-          <span>employee&#64;example.com</span>
-        </button>
+    <div class="login-panel__card">
+      <div class="login-panel__header">
+        <span>{{ isRegisterMode ? 'New worker' : 'Welcome back' }}</span>
+        <h2>{{ isRegisterMode ? 'Create worker access' : 'Log in to Smart-Shift' }}</h2>
+        <p>
+          @if (isRegisterMode) {
+            New workers are created as regular employees.
+          } @else {
+            Use a seeded account or create a new worker login.
+          }
+        </p>
       </div>
-    } @else {
-      <form class="login-form" (submit)="$event.preventDefault(); registerWorker()">
-        <label>
-          Full name
-          <input type="text" [value]="registerFullName" (input)="updateRegisterField('registerFullName', $event)" required />
-        </label>
 
-        <label>
-          Email
-          <input type="email" [value]="registerEmail" (input)="updateRegisterField('registerEmail', $event)" required />
-        </label>
+      <div class="login-mode" aria-label="Authentication mode">
+        <button type="button" [class.login-mode__active]="!isRegisterMode" (click)="showLogin()">Log in</button>
+        <button type="button" [class.login-mode__active]="isRegisterMode" (click)="showRegister()">New worker</button>
+      </div>
 
-        <label>
-          Username
-          <input type="text" [value]="registerUsername" (input)="updateRegisterField('registerUsername', $event)" required />
-        </label>
+      @if (!isRegisterMode) {
+        <form class="login-form" (submit)="$event.preventDefault(); submit()">
+          <label>
+            Username or email
+            <input
+              type="text"
+              name="login"
+              autocomplete="username"
+              [value]="loginValue"
+              (input)="updateLoginValue($event)"
+              required
+            />
+          </label>
 
-        <label>
-          Password
-          <input type="password" [value]="registerPassword" (input)="updateRegisterField('registerPassword', $event)" required />
-        </label>
+          <label>
+            Password
+            <input
+              type="password"
+              name="password"
+              autocomplete="current-password"
+              [value]="password"
+              (input)="updatePassword($event)"
+              required
+            />
+          </label>
 
-        @if (errorMessage) {
-          <p class="login-form__error">{{ errorMessage }}</p>
-        }
+          @if (errorMessage) {
+            <p class="login-form__error">{{ errorMessage }}</p>
+          }
 
-        <button type="submit" [disabled]="isLoading">
-          {{ isLoading ? 'Creating access...' : 'Create and sign in' }}
-        </button>
-      </form>
-    }
+          <button type="submit" [disabled]="isLoading">
+            {{ isLoading ? 'Logging in...' : 'Log in' }}
+          </button>
+        </form>
+
+        <div class="demo-accounts" aria-label="Demo accounts">
+          <button type="button" (click)="useDemoAccount('manager@example.com')">
+            <span class="demo-accounts__badge">M</span>
+            <strong>Manager</strong>
+            <span>manager&#64;example.com</span>
+          </button>
+          <button type="button" (click)="useDemoAccount('leader@example.com')">
+            <span class="demo-accounts__badge">S</span>
+            <strong>Shift manager</strong>
+            <span>leader&#64;example.com</span>
+          </button>
+          <button type="button" (click)="useDemoAccount('employee@example.com')">
+            <span class="demo-accounts__badge">E</span>
+            <strong>Employee</strong>
+            <span>employee&#64;example.com</span>
+          </button>
+        </div>
+      } @else {
+        <form class="login-form" (submit)="$event.preventDefault(); registerWorker()">
+          <label>
+            Full name
+            <input type="text" [value]="registerFullName" (input)="updateRegisterField('registerFullName', $event)" required />
+          </label>
+
+          <label>
+            Email
+            <input type="email" [value]="registerEmail" (input)="updateRegisterField('registerEmail', $event)" required />
+          </label>
+
+          <label>
+            Username
+            <input type="text" [value]="registerUsername" (input)="updateRegisterField('registerUsername', $event)" required />
+          </label>
+
+          <label>
+            Password
+            <input type="password" [value]="registerPassword" (input)="updateRegisterField('registerPassword', $event)" required />
+          </label>
+
+          @if (errorMessage) {
+            <p class="login-form__error">{{ errorMessage }}</p>
+          }
+
+          <button type="submit" [disabled]="isLoading">
+            {{ isLoading ? 'Creating access...' : 'Create and sign in' }}
+          </button>
+        </form>
+      }
+    </div>
   </section>
 </main>

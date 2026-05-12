@@ -3,6 +3,7 @@ export interface ScheduleBoardResponse {
   scheduleId: number | null;
   weekStartDate: string;
   weekEndDate: string;
+  publishedAt?: string | null;
   generatedAt?: string;
   canEdit: boolean;
   canManage: boolean;

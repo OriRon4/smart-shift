@@ -13,6 +13,18 @@ function formatDateKey(value) {
   return String(value).slice(0, 10);
 }
 
+function formatDateTimeValue(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  return new Date(value).toISOString();
+}
+
 function addDays(dateKey, dayOffset) {
   const date = new Date(`${dateKey}T00:00:00`);
   date.setDate(date.getDate() + dayOffset);
@@ -96,6 +108,27 @@ async function getActiveScheduleEmployees() {
   return rows;
 }
 
+async function getAllEmployees() {
+  const [rows] = await pool.query(
+    `
+      SELECT
+        id,
+        full_name,
+        role,
+        is_active,
+        professionalism,
+        responsibility,
+        pressure_handling,
+        seniority_months,
+        potential
+      FROM employees
+      ORDER BY role, id
+    `
+  );
+
+  return rows;
+}
+
 async function getShiftsByWeek(weekStartDate) {
   const weekRange = getWeekRange(weekStartDate);
 
@@ -144,8 +177,9 @@ async function getShiftRequestsByWeek(weekStartDate) {
 
 async function getScheduleInputsByWeek(weekStartDate) {
   const weekRange = getWeekRange(weekStartDate);
-  const [employees, shifts, shiftRequests] = await Promise.all([
+  const [employees, allEmployees, shifts, shiftRequests] = await Promise.all([
     getActiveScheduleEmployees(),
+    getAllEmployees(),
     ensureWeeklyShifts(weekRange.weekStartDate),
     getShiftRequestsByWeek(weekRange.weekStartDate),
   ]);
@@ -154,6 +188,7 @@ async function getScheduleInputsByWeek(weekStartDate) {
     weekStartDate: weekRange.weekStartDate,
     weekEndDate: weekRange.weekEndDate,
     employees,
+    allEmployees,
     shifts,
     shiftRequests,
   };
@@ -178,12 +213,30 @@ async function getWeeklyScheduleByWeekStartDate(connection, weekStartDate) {
     `
       SELECT
         id,
-        week_start_date
+        week_start_date,
+        published_at
       FROM weekly_schedules
       WHERE week_start_date = ?
       LIMIT 1
     `,
     [weekStartDate]
+  );
+
+  return rows[0] || null;
+}
+
+async function getWeeklyScheduleById(connection, scheduleId) {
+  const [rows] = await connection.query(
+    `
+      SELECT
+        id,
+        week_start_date,
+        published_at
+      FROM weekly_schedules
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [scheduleId]
   );
 
   return rows[0] || null;
@@ -224,6 +277,7 @@ async function getPersistedScheduleByWeek(weekStartDate) {
   return {
     scheduleId: schedule.id,
     weekStartDate: formatDateKey(schedule.week_start_date),
+    publishedAt: formatDateTimeValue(schedule.published_at),
     assignments: assignments.map((assignment) => ({
       id: assignment.id,
       scheduleId: assignment.schedule_id,
@@ -233,6 +287,16 @@ async function getPersistedScheduleByWeek(weekStartDate) {
       assignedStrengthScore: Number(assignment.assigned_strength_score),
     })),
   };
+}
+
+async function getPersistedScheduleById(scheduleId) {
+  const schedule = await getWeeklyScheduleById(pool, scheduleId);
+
+  if (!schedule) {
+    return null;
+  }
+
+  return getPersistedScheduleByWeek(formatDateKey(schedule.week_start_date));
 }
 
 async function insertScheduleAssignments(connection, scheduleId, assignments) {
@@ -277,11 +341,13 @@ async function deleteScheduleAssignmentsByScheduleId(connection, scheduleId) {
   return result.affectedRows;
 }
 
-async function touchWeeklySchedule(connection, scheduleId) {
+async function touchWeeklySchedule(connection, scheduleId, options = {}) {
+  const publishedClause = options.clearPublished ? ", published_at = NULL" : "";
+
   await connection.query(
     `
       UPDATE weekly_schedules
-      SET updated_at = CURRENT_TIMESTAMP
+      SET updated_at = CURRENT_TIMESTAMP${publishedClause}
       WHERE id = ?
     `,
     [scheduleId]
@@ -312,7 +378,9 @@ async function saveScheduleAssignments(weekStartDate, assignments) {
 
     if (existingSchedule) {
       await deleteScheduleAssignmentsByScheduleId(connection, scheduleId);
-      await touchWeeklySchedule(connection, scheduleId);
+      await touchWeeklySchedule(connection, scheduleId, {
+        clearPublished: true,
+      });
     }
 
     const savedAssignmentCount = await insertScheduleAssignments(
@@ -326,8 +394,87 @@ async function saveScheduleAssignments(weekStartDate, assignments) {
     return {
       scheduleId,
       weekStartDate: weekRange.weekStartDate,
+      publishedAt: null,
       savedAssignmentCount,
       replacedExisting: Boolean(existingSchedule),
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function clearScheduleAssignments(scheduleId) {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const schedule = await getWeeklyScheduleById(connection, scheduleId);
+
+    if (!schedule) {
+      const error = new Error("Schedule not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const deletedAssignmentCount = await deleteScheduleAssignmentsByScheduleId(
+      connection,
+      scheduleId
+    );
+
+    await touchWeeklySchedule(connection, scheduleId, {
+      clearPublished: true,
+    });
+    await connection.commit();
+
+    return {
+      scheduleId,
+      weekStartDate: formatDateKey(schedule.week_start_date),
+      publishedAt: null,
+      deletedAssignmentCount,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function publishSchedule(scheduleId) {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const schedule = await getWeeklyScheduleById(connection, scheduleId);
+
+    if (!schedule) {
+      const error = new Error("Schedule not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    await connection.query(
+      `
+        UPDATE weekly_schedules
+        SET published_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `,
+      [scheduleId]
+    );
+
+    const publishedSchedule = await getWeeklyScheduleById(connection, scheduleId);
+    await connection.commit();
+
+    return {
+      scheduleId,
+      weekStartDate: formatDateKey(publishedSchedule.week_start_date),
+      publishedAt: formatDateTimeValue(publishedSchedule.published_at),
     };
   } catch (error) {
     await connection.rollback();
@@ -340,10 +487,15 @@ async function saveScheduleAssignments(weekStartDate, assignments) {
 module.exports = {
   ensureWeeklyShifts,
   getActiveScheduleEmployees,
+  getAllEmployees,
   getShiftsByWeek,
   getShiftRequestsByWeek,
   getScheduleInputsByWeek,
   getWeeklyScheduleByWeekStartDate,
+  getWeeklyScheduleById,
   getPersistedScheduleByWeek,
+  getPersistedScheduleById,
   saveScheduleAssignments,
+  clearScheduleAssignments,
+  publishSchedule,
 };

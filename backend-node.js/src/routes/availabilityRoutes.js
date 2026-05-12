@@ -11,6 +11,8 @@ router.use(requireAuth);
 
 router.get("/me", availabilityController.getMyAvailability);
 router.post("/me", availabilityController.submitMyAvailability);
+router.get("/employees/:employeeId", requireManager, availabilityController.getEmployeeAvailability);
+router.put("/employees/:employeeId", requireManager, availabilityController.updateEmployeeAvailability);
 router.get("/", requireManager, availabilityController.getAllAvailability);
 
 module.exports = router;

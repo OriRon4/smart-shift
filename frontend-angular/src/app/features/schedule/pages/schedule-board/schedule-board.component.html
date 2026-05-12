@@ -22,21 +22,34 @@
         <strong>{{ weekRangeLabel }}</strong>
         <span>
           @if (board?.scheduleId) {
-            Published schedule #{{ board?.scheduleId }}
+            Schedule #{{ board?.scheduleId }} - {{ publishedStatusLabel }}
           } @else {
-            No published schedule
+            No saved schedule
           }
         </span>
       </div>
 
-      @if (canManageSchedule()) {
+      @if (canManageSchedule() || canSaveScheduleAssignments()) {
         <div class="schedule-board__manager-actions">
-          <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="validateSchedule()">
-            Validate schedule
-          </button>
-          <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="saveChanges()">
+          @if (canManageSchedule()) {
+            <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="validateSchedule()">
+              Validate schedule
+            </button>
+            <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="publishSchedule()">
+              Publish Schedule
+            </button>
+            <button type="button" class="schedule-board__clear-action" [disabled]="!board?.scheduleId || isLoading" (click)="clearSchedule()">
+              Clear schedule
+            </button>
+          }
+          @if (canSaveScheduleAssignments()) {
+            <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="saveChanges()">
             Save changes
-          </button>
+            </button>
+          }
+          @if (canManageSchedule()) {
+            <small class="schedule-board__publish-status">{{ publishedStatusLabel }}</small>
+          }
         </div>
       }
     </section>
@@ -52,94 +65,117 @@
         <button
           type="button"
           class="kpi-card"
-          [class.kpi-card--good]="scheduleStatusTone === 'good'"
-          [class.kpi-card--warning]="scheduleStatusTone === 'warning'"
-          [class.kpi-card--critical]="scheduleStatusTone === 'critical'"
-          (click)="setBoardFilter('issues')"
-        >
-          <span class="kpi-card__label">Schedule Status</span>
-          <strong>{{ scheduleStatusValue }}</strong>
-          <small>{{ scheduleStatusHelper }}</small>
-        </button>
-
-        <button
-          type="button"
-          class="kpi-card"
-          [class.kpi-card--critical]="unfilledSlots > 0"
-          [class.kpi-card--warning]="unfilledSlots === 0 && openIssueCount > 0"
-          [class.kpi-card--active]="boardFilter === 'issues'"
-          (click)="setBoardFilter('issues')"
-        >
-          <span class="kpi-card__label">Open Issues</span>
-          <strong>{{ openIssueCount }}</strong>
-          <small>{{ openIssuesHelper }}</small>
-        </button>
-
-        <article class="kpi-card">
-          <span class="kpi-card__label">Coverage Quality</span>
-          <strong>{{ coveragePercent }}%</strong>
-          <small>{{ coverageQualityHelper }}</small>
-        </article>
-
-        <button
-          type="button"
-          class="kpi-card"
-          [class.kpi-card--good]="strengthRiskTone === 'good'"
-          [class.kpi-card--warning]="strengthRiskTone === 'warning'"
-          [class.kpi-card--critical]="strengthRiskTone === 'critical'"
+          [class.kpi-card--good]="belowStrengthShiftCount === 0"
+          [class.kpi-card--warning]="belowStrengthShiftCount > 0"
           [class.kpi-card--active]="boardFilter === 'strength'"
           (click)="setBoardFilter('strength')"
         >
-          <span class="kpi-card__label">Strength Risk</span>
-          <strong>{{ strengthRiskValue }}</strong>
-          <small>{{ strengthRiskHelper }}</small>
+          <span class="kpi-card__label">Below strength target</span>
+          <strong>{{ strengthRiskGroups }}</strong>
+          <small>{{ belowStrengthShiftCount }} shifts affected</small>
         </button>
 
-        <article
-          class="kpi-card"
-          [class.kpi-card--good]="fairnessBalanceTone === 'good'"
-          [class.kpi-card--warning]="fairnessBalanceTone === 'warning'"
-          [class.kpi-card--critical]="fairnessBalanceTone === 'critical'"
-        >
-          <span class="kpi-card__label">Fairness Balance</span>
-          <strong>{{ fairnessBalanceValue }}</strong>
-          <small>{{ fairnessBalanceHelper }}</small>
+        <article class="kpi-card kpi-card--neutral">
+          <span class="kpi-card__label">Weakest shift</span>
+          <strong>{{ weakestShift?.label || 'None' }}</strong>
+          <small>{{ weakestShift?.helper || 'All shifts meet strength target' }}</small>
         </article>
 
         <button
           type="button"
           class="kpi-card"
-          [class.kpi-card--good]="mostCriticalShiftTone === 'good'"
-          [class.kpi-card--warning]="mostCriticalShiftTone === 'warning'"
-          [class.kpi-card--critical]="mostCriticalShiftTone === 'critical'"
-          [class.kpi-card--active]="!!focusedShiftId"
-          (click)="focusMostCriticalShift()"
+          [class.kpi-card--good]="gapRoleGroupCount === 0"
+          [class.kpi-card--warning]="gapRoleGroupCount > 0"
+          [class.kpi-card--active]="boardFilter === 'gaps'"
+          (click)="setBoardFilter('gaps')"
         >
-          <span class="kpi-card__label">Most Critical Shift</span>
-          <strong>{{ mostCriticalShiftValue }}</strong>
-          <small>{{ mostCriticalShiftHelper }}</small>
+          <span class="kpi-card__label">Shifts with gaps</span>
+          <strong>{{ gapRoleGroupCount }}</strong>
+          <small>{{ gapShiftCount }} shifts - {{ unfilledSlots }} missing assignments</small>
         </button>
+
+        <div class="kpi-popover-shell">
+          <button
+            type="button"
+            class="kpi-card"
+            [class.kpi-card--warning]="employeesUnderTarget.length > 0"
+            [class.kpi-card--good]="employeesUnderTarget.length === 0"
+            (click)="toggleEmployeesUnderTarget()"
+          >
+            <span class="kpi-card__label">Employees under target</span>
+            <strong>{{ employeesUnderTarget.length }}</strong>
+            <small>assigned below target</small>
+          </button>
+
+          @if (showEmployeesUnderTarget) {
+            <section class="kpi-popover">
+              @for (employee of employeesUnderTarget; track employee.employeeId) {
+                <div>
+                  <strong>{{ employee.fullName }}</strong>
+                  <span>{{ employee.assigned }} / {{ employee.target }} target - requested {{ employee.requested }} - gap {{ employee.gap }}</span>
+                </div>
+              } @empty {
+                <p>No employees are significantly under target.</p>
+              }
+            </section>
+          }
+        </div>
       </section>
     }
 
     @if (pendingReplacement) {
-      <section class="replacement-panel">
-        <div>
-          <span>Manual replacement</span>
-          <strong>{{ pendingReplacement.employeeName }}</strong>
+      <button class="replacement-backdrop" type="button" aria-label="Close replacement drawer" (click)="closeReplacementDrawer()"></button>
+      <aside class="replacement-drawer" aria-label="Replace worker">
+        <header class="replacement-drawer__header">
+          <div>
+            <span>Replace worker</span>
+            <h2>{{ pendingReplacement.dayName }} {{ pendingReplacement.shiftType }}</h2>
+            <p>Role: {{ pendingReplacement.roleLabel }} - Current: {{ pendingReplacement.employeeName }}</p>
+          </div>
+          <button type="button" aria-label="Close replacement drawer" (click)="closeReplacementDrawer()">x</button>
+        </header>
+
+        <label class="replacement-search">
+          Search employee
+          <input
+            type="search"
+            [value]="replacementSearch"
+            (input)="updateReplacementSearch($event)"
+            placeholder="Type a name"
+          />
+        </label>
+
+        <div class="replacement-legend" aria-label="Replacement legend">
+          <span><i class="badge-dot badge-dot--available"></i> submitted availability</span>
+          <span><i class="badge-dot badge-dot--scheduled"></i> already scheduled</span>
         </div>
 
-        <select name="replacement" [value]="selectedReplacementEmployeeId || ''" (change)="updateSelectedReplacement($event)">
-          <option value="">Choose replacement</option>
+        <div class="replacement-list">
           @for (employee of getReplacementCandidates(); track employee.id) {
-            <option [value]="employee.id">{{ employee.fullName }}</option>
+            <article class="replacement-row">
+              <span class="replacement-row__avatar">{{ getEmployeeInitials(employee) }}</span>
+              <div class="replacement-row__main">
+                <strong>{{ employee.fullName }}</strong>
+                <span>{{ formatEmployeeRole(employee) }} - {{ getEmployeeShiftRatio(employee) }}</span>
+                <div class="replacement-row__badges">
+                  @if (isEmployeeAvailableForPendingShift(employee)) {
+                    <span class="replacement-badge replacement-badge--available">Available</span>
+                  }
+                  @if (isEmployeeScheduledForPendingShift(employee)) {
+                    <span class="replacement-badge replacement-badge--scheduled">Scheduled</span>
+                  }
+                  @if (employee.isActive === false) {
+                    <span class="replacement-badge replacement-badge--inactive">Inactive</span>
+                  }
+                </div>
+              </div>
+              <button type="button" (click)="applyReplacement(employee.id)">Replace</button>
+            </article>
+          } @empty {
+            <p class="replacement-list__empty">No employees match this search.</p>
           }
-        </select>
-
-        <button type="button" [disabled]="!selectedReplacementEmployeeId" (click)="applyReplacement()">
-          Stage replacement
-        </button>
-      </section>
+        </div>
+      </aside>
     }
 
     @if (validationResult && canManageSchedule()) {
@@ -153,32 +189,39 @@
   <section class="schedule-board-panel">
     @if (isLoading) {
       <section class="schedule-board__state" aria-live="polite">
-        <strong>Loading schedule</strong>
-        <p>{{ weekRangeLabel }}</p>
+        <div class="schedule-board__state-card">
+          <strong>Loading schedule</strong>
+          <p>{{ weekRangeLabel }}</p>
+        </div>
       </section>
     } @else if (errorMessage) {
       <section class="schedule-board__state schedule-board__state--error" aria-live="polite">
-        <strong>Schedule action failed</strong>
-        <p>{{ errorMessage }}</p>
+        <div class="schedule-board__state-card">
+          <strong>Schedule action failed</strong>
+          <p>{{ errorMessage }}</p>
+        </div>
       </section>
     } @else if (board) {
       <app-schedule-grid
         [board]="board"
-        [canManage]="canManageSchedule()"
+        [canManage]="canReplaceScheduleWorkers()"
         [activeShiftIds]="activeShiftIds"
+        [activeRoleGroupKeys]="activeRoleGroupKeys"
         [onlyShowActive]="boardFilter !== 'all'"
         (replaceAssignment)="openReplacement($event)"
       />
     } @else {
       <section class="schedule-board__state">
-        <strong>No saved schedule yet</strong>
-        <p>
-          @if (canManageSchedule()) {
-            Generate a schedule for this week.
-          } @else {
-            A manager has not published a schedule for this week.
-          }
-        </p>
+        <div class="schedule-board__state-card">
+          <strong>No saved schedule yet</strong>
+          <p>
+            @if (canManageSchedule()) {
+              Generate a schedule for this week.
+            } @else {
+              A manager has not published a schedule for this week.
+            }
+          </p>
+        </div>
       </section>
     }
   </section>

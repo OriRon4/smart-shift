@@ -39,8 +39,39 @@ async function getAllAvailability(req, res, next) {
   }
 }
 
+async function getEmployeeAvailability(req, res, next) {
+  try {
+    const { weekStartDate } = req.query || {};
+    const availability = await availabilityService.getEmployeeAvailability(
+      req.params.employeeId,
+      weekStartDate
+    );
+
+    res.status(200).json(availability);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateEmployeeAvailability(req, res, next) {
+  try {
+    const { weekStartDate, shiftIds } = req.body || {};
+    const availability = await availabilityService.updateEmployeeAvailability(
+      req.params.employeeId,
+      weekStartDate,
+      shiftIds
+    );
+
+    res.status(200).json(availability);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getMyAvailability,
   submitMyAvailability,
+  getEmployeeAvailability,
+  updateEmployeeAvailability,
   getAllAvailability,
 };

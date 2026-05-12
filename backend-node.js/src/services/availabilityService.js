@@ -1,4 +1,5 @@
 const availabilityRepository = require("../repositories/availabilityRepository");
+const employeeRepository = require("../repositories/employeeRepository");
 const { SCHEDULE_JOB_ROLES } = require("../constants/roles");
 const { createHttpError } = require("../utils/errors");
 
@@ -90,6 +91,68 @@ async function submitMyAvailability(user, weekStartDate, shiftIds) {
   };
 }
 
+async function getEmployeeAvailability(employeeId, weekStartDate) {
+  const numericEmployeeId = Number(employeeId);
+
+  if (!Number.isInteger(numericEmployeeId) || numericEmployeeId <= 0) {
+    throw createHttpError(400, "employeeId must be a positive integer");
+  }
+
+  const employee = await employeeRepository.getEmployeeById(numericEmployeeId);
+
+  if (!employee) {
+    throw createHttpError(404, "Employee not found");
+  }
+
+  const shifts = await availabilityRepository.getShiftsForAvailability(weekStartDate);
+  const selectedShiftIds =
+    await availabilityRepository.getAvailabilityForEmployee(
+      numericEmployeeId,
+      weekStartDate
+    );
+
+  return {
+    employeeId: numericEmployeeId,
+    weekStartDate,
+    selectedShiftIds,
+    days: buildAvailabilityGrid(shifts, selectedShiftIds),
+  };
+}
+
+async function updateEmployeeAvailability(employeeId, weekStartDate, shiftIds) {
+  const numericEmployeeId = Number(employeeId);
+
+  if (!Number.isInteger(numericEmployeeId) || numericEmployeeId <= 0) {
+    throw createHttpError(400, "employeeId must be a positive integer");
+  }
+
+  if (!Array.isArray(shiftIds)) {
+    throw createHttpError(400, "shiftIds must be an array");
+  }
+
+  const employee = await employeeRepository.getEmployeeById(numericEmployeeId);
+
+  if (!employee) {
+    throw createHttpError(404, "Employee not found");
+  }
+
+  const selectedShiftIds =
+    await availabilityRepository.replaceAvailabilityForEmployee(
+      numericEmployeeId,
+      weekStartDate,
+      shiftIds
+    );
+  const shifts = await availabilityRepository.getShiftsForAvailability(weekStartDate);
+
+  return {
+    message: "Employee availability saved successfully",
+    employeeId: numericEmployeeId,
+    weekStartDate,
+    selectedShiftIds,
+    days: buildAvailabilityGrid(shifts, selectedShiftIds),
+  };
+}
+
 async function getAllAvailability(weekStartDate) {
   const rows = await availabilityRepository.getAllAvailability(weekStartDate);
   const submissionsByEmployeeId = new Map();
@@ -121,5 +184,7 @@ async function getAllAvailability(weekStartDate) {
 module.exports = {
   getMyAvailability,
   submitMyAvailability,
+  getEmployeeAvailability,
+  updateEmployeeAvailability,
   getAllAvailability,
 };

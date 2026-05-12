@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 
 import {
+  ScheduleDay,
   JobRole,
   ScheduleBoardResponse,
   ScheduleRoleGroup,
@@ -12,7 +13,11 @@ type RoleGroupStatus = 'optimal' | 'covered' | 'understaffed' | 'plain';
 
 export interface ReplaceAssignmentRequest {
   shiftId: number;
+  dayName: string;
+  date: string;
+  shiftType: string;
   jobRole: JobRole;
+  roleLabel: string;
   employeeId: number;
   employeeName: string;
 }
@@ -27,6 +32,7 @@ export class ScheduleGridComponent {
   @Input({ required: true }) board: ScheduleBoardResponse | null = null;
   @Input() canManage = false;
   @Input() activeShiftIds = new Set<number>();
+  @Input() activeRoleGroupKeys = new Set<string>();
   @Input() onlyShowActive = false;
 
   @Output() replaceAssignment = new EventEmitter<ReplaceAssignmentRequest>();
@@ -85,6 +91,10 @@ export class ScheduleGridComponent {
     return this.activeShiftIds.has(shift.shiftId);
   }
 
+  isRoleGroupHighlighted(shift: ScheduleShift, roleGroup: ScheduleRoleGroup): boolean {
+    return this.activeRoleGroupKeys.has(`${shift.shiftId}:${roleGroup.jobRole}`);
+  }
+
   getWorkerInitials(worker: ScheduleWorker): string {
     return worker.fullName
       .split(' ')
@@ -95,13 +105,18 @@ export class ScheduleGridComponent {
   }
 
   requestReplacement(
+    day: ScheduleDay,
     shift: ScheduleShift,
     roleGroup: ScheduleRoleGroup,
     worker: ScheduleWorker
   ): void {
     this.replaceAssignment.emit({
       shiftId: shift.shiftId,
+      dayName: day.dayName,
+      date: day.date,
+      shiftType: this.formatShiftType(shift),
       jobRole: roleGroup.jobRole,
+      roleLabel: roleGroup.label,
       employeeId: worker.employeeId,
       employeeName: worker.fullName
     });

@@ -32,6 +32,7 @@ async function saveAssignments(req, res, next) {
   try {
     const { weekStartDate, assignments } = req.body || {};
     const savedSchedule = await scheduleService.saveScheduleAssignments(
+      req.params.scheduleId,
       weekStartDate,
       assignments,
       req.user
@@ -47,6 +48,7 @@ async function validateSchedule(req, res, next) {
   try {
     const { weekStartDate } = req.body || {};
     const validationResult = await scheduleService.validateSchedule(
+      req.params.scheduleId,
       weekStartDate,
       req.user
     );
@@ -57,9 +59,37 @@ async function validateSchedule(req, res, next) {
   }
 }
 
+async function clearScheduleAssignments(req, res, next) {
+  try {
+    const clearedSchedule = await scheduleService.clearScheduleAssignments(
+      req.params.scheduleId,
+      req.user
+    );
+
+    res.status(200).json(clearedSchedule);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function publishSchedule(req, res, next) {
+  try {
+    const publishedSchedule = await scheduleService.publishSchedule(
+      req.params.scheduleId,
+      req.user
+    );
+
+    res.status(200).json(publishedSchedule);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getSchedule,
   generateSchedule,
   saveAssignments,
   validateSchedule,
+  clearScheduleAssignments,
+  publishSchedule,
 };

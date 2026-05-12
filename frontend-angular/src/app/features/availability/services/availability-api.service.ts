@@ -34,4 +34,29 @@ export class AvailabilityApiService {
       shiftIds
     });
   }
+
+  getEmployeeAvailability(
+    employeeId: number,
+    weekStartDate: string
+  ): Observable<AvailabilityResponse> {
+    const params = new HttpParams().set('weekStartDate', weekStartDate);
+    return this.http.get<AvailabilityResponse>(
+      `${this.apiUrl}/employees/${employeeId}`,
+      { params }
+    );
+  }
+
+  updateEmployeeAvailability(
+    employeeId: number,
+    weekStartDate: string,
+    shiftIds: number[]
+  ): Observable<AvailabilityResponse> {
+    return this.http.put<AvailabilityResponse>(
+      `${this.apiUrl}/employees/${employeeId}`,
+      {
+        weekStartDate,
+        shiftIds
+      }
+    );
+  }
 }

@@ -89,8 +89,22 @@ async function updateEmployee(employeeId, employee) {
   return getEmployeeById(employeeId);
 }
 
+async function deactivateEmployee(employeeId) {
+  await pool.query(
+    `
+      UPDATE employees
+      SET is_active = FALSE
+      WHERE id = ?
+    `,
+    [employeeId]
+  );
+
+  return getEmployeeById(employeeId);
+}
+
 module.exports = {
   getEmployees,
   getEmployeeById,
   updateEmployee,
+  deactivateEmployee,
 };

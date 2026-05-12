@@ -217,6 +217,17 @@
   padding: 0 14px;
 }
 
+.employee-card .employee-card__deactivate {
+  border: 1px solid #d5af63;
+  background: #fffaf0;
+  color: #7a5216;
+}
+
+.employee-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .employee-card--empty {
   color: #66778a;
 }

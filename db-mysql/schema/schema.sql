@@ -95,6 +95,7 @@ CREATE TABLE weekly_schedules (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     ON UPDATE CURRENT_TIMESTAMP,
+  published_at TIMESTAMP NULL DEFAULT NULL,
   PRIMARY KEY (id),
   CONSTRAINT uq_weekly_schedules_week_start_date
     UNIQUE (week_start_date)

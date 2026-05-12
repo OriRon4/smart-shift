@@ -26,6 +26,14 @@ export class PermissionService {
     return this.isManager(user);
   }
 
+  canReplaceScheduleWorkers(user: AuthUser | null): boolean {
+    return this.isManager(user) || this.isShiftLeader(user);
+  }
+
+  canSaveScheduleAssignments(user: AuthUser | null): boolean {
+    return this.canReplaceScheduleWorkers(user);
+  }
+
   canUseLimitedScheduleEditing(user: AuthUser | null): boolean {
     return this.isManager(user) || this.isShiftLeader(user);
   }

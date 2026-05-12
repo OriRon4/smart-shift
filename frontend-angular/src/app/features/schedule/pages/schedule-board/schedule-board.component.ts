@@ -18,6 +18,7 @@ import { AuthService } from '../../../../core/auth/auth.service';
 import { PermissionService } from '../../../../core/permissions/permission.service';
 import { Employee } from '../../../employees/models/employee.models';
 import { EmployeesApiService } from '../../../employees/services/employees-api.service';
+import { AvailabilityApiService } from '../../../availability/services/availability-api.service';
 
 @Component({
   selector: 'app-schedule-board',
@@ -33,14 +34,17 @@ export class ScheduleBoardComponent implements OnInit {
   protected selectedWeekStartDate = '2026-04-19';
   protected board: ScheduleBoardResponse | null = null;
   protected employees: Employee[] = [];
+  protected availableShiftIdsByEmployeeId = new Map<number, Set<number>>();
   protected pendingReplacement: ReplaceAssignmentRequest | null = null;
-  protected selectedReplacementEmployeeId: number | null = null;
+  protected replacementSearch = '';
   protected validationResult: ScheduleValidationResponse | null = null;
   protected isLoading = false;
   protected errorMessage = '';
   protected successMessage = '';
-  protected boardFilter: 'all' | 'issues' | 'strength' = 'all';
+  protected boardFilter: 'all' | 'gaps' | 'strength' = 'all';
   protected focusedShiftId: number | null = null;
+  protected hasUnsavedChanges = false;
+  protected showEmployeesUnderTarget = false;
 
   protected readonly currentUser = this.authService.currentUser;
 
@@ -48,18 +52,20 @@ export class ScheduleBoardComponent implements OnInit {
     private readonly scheduleApiService: ScheduleApiService,
     private readonly authService: AuthService,
     private readonly permissionService: PermissionService,
-    private readonly employeesApiService: EmployeesApiService
+    private readonly employeesApiService: EmployeesApiService,
+    private readonly availabilityApiService: AvailabilityApiService
   ) {}
 
   ngOnInit(): void {
     this.loadSchedule();
 
-    if (this.canManageSchedule()) {
+    if (this.canReplaceScheduleWorkers()) {
       this.employeesApiService.getEmployees().subscribe({
         next: (response) => {
           this.employees = response.employees;
         }
       });
+      this.loadReplacementAvailability();
     }
   }
 
@@ -71,6 +77,14 @@ export class ScheduleBoardComponent implements OnInit {
 
   protected canManageSchedule(): boolean {
     return this.permissionService.canManageSchedule(this.currentUser());
+  }
+
+  protected canReplaceScheduleWorkers(): boolean {
+    return this.permissionService.canReplaceScheduleWorkers(this.currentUser());
+  }
+
+  protected canSaveScheduleAssignments(): boolean {
+    return this.permissionService.canSaveScheduleAssignments(this.currentUser());
   }
 
   protected get totalAssignedEmployees(): number {
@@ -129,7 +143,27 @@ export class ScheduleBoardComponent implements OnInit {
     return this.board?.summary?.belowStrengthTargetRoleGroups || 0;
   }
 
-  protected get belowStrengthShiftCount(): number {
+  protected get gapRoleGroupCount(): number {
+    if (!this.board) {
+      return 0;
+    }
+
+    return this.board.days.reduce(
+      (total, day) =>
+        total +
+        day.shifts.reduce(
+          (shiftTotal, shift) =>
+            shiftTotal +
+            shift.roleGroups.filter(
+              (roleGroup) => (roleGroup.uncoveredSlots || 0) > 0
+            ).length,
+          0
+        ),
+      0
+    );
+  }
+
+  protected get gapShiftCount(): number {
     if (!this.board) {
       return 0;
     }
@@ -139,7 +173,24 @@ export class ScheduleBoardComponent implements OnInit {
         total +
         day.shifts.filter((shift) =>
           shift.roleGroups.some(
-            (roleGroup) => roleGroup.meetsStrengthTarget === false
+            (roleGroup) => (roleGroup.uncoveredSlots || 0) > 0
+          )
+        ).length,
+      0
+    );
+  }
+
+  protected get belowStrengthShiftCount(): number {
+    if (!this.board) {
+      return 0;
+    }
+
+    return this.board.days.reduce(
+      (total, day) =>
+        total +
+        day.shifts.filter((shift) =>
+          shift.roleGroups.some((roleGroup) =>
+            this.isRoleGroupBelowStrength(roleGroup)
           )
         ).length,
       0
@@ -148,22 +199,30 @@ export class ScheduleBoardComponent implements OnInit {
 
   protected get scheduleStatusValue(): string {
     if (!this.board) {
-      return 'Draft';
+      return 'Not generated';
     }
 
-    if (this.board.scheduleId && this.unfilledSlots === 0 && this.belowStrengthShiftCount === 0) {
-      return 'Published';
+    if (this.hasUnsavedChanges) {
+      return 'Unsaved changes';
     }
 
-    if (this.unfilledSlots > 0) {
-      return 'Missing assignments';
+    if (this.totalAssignedEmployees === 0) {
+      return 'Empty';
     }
 
-    if (this.belowStrengthShiftCount > 0) {
+    if (this.validationResult && this.validationResult.warnings.length === 0) {
+      return 'Validated';
+    }
+
+    if (this.validationResult?.warnings.length || this.unfilledSlots > 0 || this.belowStrengthShiftCount > 0) {
       return 'Needs review';
     }
 
-    return 'Ready to publish';
+    if (this.board.scheduleId) {
+      return 'Saved';
+    }
+
+    return 'Draft';
   }
 
   protected get scheduleStatusTone(): string {
@@ -187,13 +246,103 @@ export class ScheduleBoardComponent implements OnInit {
       return 'No schedule generated yet';
     }
 
-    const attentionCount = this.getProblemShiftIds('issues').size;
+    if (this.hasUnsavedChanges) {
+      return 'Save changes to persist replacements';
+    }
+
+    if (this.totalAssignedEmployees === 0) {
+      return 'No assignments in this schedule';
+    }
+
+    if (this.validationResult) {
+      return `${this.validationResult.warnings.length} validation warnings`;
+    }
+
+    const attentionCount = this.getProblemShiftIds('gaps').size;
 
     if (attentionCount > 0) {
       return `${attentionCount} shifts need attention`;
     }
 
     return 'All required slots are filled';
+  }
+
+  protected get weakestShift(): {
+    label: string;
+    helper: string;
+    gap: number;
+  } | null {
+    if (!this.board) {
+      return null;
+    }
+
+    const candidates = this.board.days.flatMap((day) =>
+      day.shifts.flatMap((shift) =>
+        shift.roleGroups.map((roleGroup) => {
+          const assignedStrength = roleGroup.assignedStrengthScore || 0;
+          const requiredStrength = roleGroup.requiredStrengthScore || 0;
+
+          return {
+            label: `${day.dayName} ${this.formatShiftType(shift)}`,
+            helper: `${Number(assignedStrength.toFixed(1))} / ${Number(
+              requiredStrength.toFixed(1)
+            )} strength`,
+            gap: Math.max(0, requiredStrength - assignedStrength),
+          };
+        })
+      )
+    );
+
+    return (
+      candidates
+        .filter((candidate) => candidate.gap > 0)
+        .sort((left, right) => right.gap - left.gap)[0] || null
+    );
+  }
+
+  protected get employeesUnderTarget(): {
+    employeeId: number;
+    fullName: string;
+    assigned: number;
+    requested: number;
+    target: number;
+    gap: number;
+  }[] {
+    const assignedCounts = this.getAssignedCountsByEmployee();
+
+    return this.employees
+      .filter((employee) => employee.isActive !== false)
+      .map((employee) => {
+        const assigned = assignedCounts.get(employee.id) || 0;
+        const requested = this.getRequestedShiftCount(employee.id);
+        const target = this.calculateTargetShifts(employee, requested);
+
+        return {
+          employeeId: employee.id,
+          fullName: employee.fullName,
+          assigned,
+          requested,
+          target,
+          gap: Number((assigned - target).toFixed(1)),
+        };
+      })
+      .filter((employee) => employee.requested > 0 && employee.assigned < employee.target - 0.5)
+      .sort((left, right) => left.gap - right.gap || left.fullName.localeCompare(right.fullName));
+  }
+
+  protected toggleEmployeesUnderTarget(): void {
+    this.showEmployeesUnderTarget = !this.showEmployeesUnderTarget;
+  }
+
+  protected get publishedStatusLabel(): string {
+    if (!this.board?.publishedAt) {
+      return 'Not published yet';
+    }
+
+    return `Published at ${new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(new Date(this.board.publishedAt))}`;
   }
 
   protected get openIssueCount(): number {
@@ -380,7 +529,7 @@ export class ScheduleBoardComponent implements OnInit {
     return strengthRisks[0] || null;
   }
 
-  protected setBoardFilter(filter: 'all' | 'issues' | 'strength'): void {
+  protected setBoardFilter(filter: 'all' | 'gaps' | 'strength'): void {
     this.boardFilter = this.boardFilter === filter ? 'all' : filter;
     this.focusedShiftId = null;
   }
@@ -403,8 +552,8 @@ export class ScheduleBoardComponent implements OnInit {
       return new Set([this.focusedShiftId]);
     }
 
-    if (this.boardFilter === 'issues') {
-      return this.getProblemShiftIds('issues');
+    if (this.boardFilter === 'gaps') {
+      return this.getProblemShiftIds('gaps');
     }
 
     if (this.boardFilter === 'strength') {
@@ -412,6 +561,18 @@ export class ScheduleBoardComponent implements OnInit {
     }
 
     return new Set<number>();
+  }
+
+  protected get activeRoleGroupKeys(): Set<string> {
+    if (this.boardFilter === 'gaps') {
+      return this.getProblemRoleGroupKeys('gaps');
+    }
+
+    if (this.boardFilter === 'strength') {
+      return this.getProblemRoleGroupKeys('strength');
+    }
+
+    return new Set<string>();
   }
 
   protected previousWeek(): void {
@@ -428,6 +589,8 @@ export class ScheduleBoardComponent implements OnInit {
     this.successMessage = '';
     this.validationResult = null;
     this.pendingReplacement = null;
+    this.hasUnsavedChanges = false;
+    this.showEmployeesUnderTarget = false;
 
     this.scheduleApiService.getSchedule(this.selectedWeekStartDate).subscribe({
       next: (board) => {
@@ -453,6 +616,8 @@ export class ScheduleBoardComponent implements OnInit {
         next: (board) => {
           this.board = board;
           this.successMessage = 'Schedule generated.';
+          this.hasUnsavedChanges = false;
+          this.showEmployeesUnderTarget = false;
           this.isLoading = false;
         },
         error: (error: unknown) => {
@@ -463,41 +628,51 @@ export class ScheduleBoardComponent implements OnInit {
   }
 
   protected openReplacement(request: ReplaceAssignmentRequest): void {
-    if (!this.canManageSchedule()) {
+    if (!this.canReplaceScheduleWorkers()) {
       return;
     }
 
     this.pendingReplacement = request;
-    this.selectedReplacementEmployeeId = null;
+    this.replacementSearch = '';
+  }
+
+  protected closeReplacementDrawer(): void {
+    this.pendingReplacement = null;
+    this.replacementSearch = '';
   }
 
   protected getReplacementCandidates(): Employee[] {
-    const pendingReplacement = this.pendingReplacement;
+    const searchValue = this.replacementSearch.trim().toLowerCase();
 
-    if (!pendingReplacement) {
-      return [];
-    }
+    return this.employees
+      .filter((employee) =>
+        searchValue
+          ? employee.fullName.toLowerCase().includes(searchValue)
+          : true
+      )
+      .sort((leftEmployee, rightEmployee) => {
+        const leftStatus = this.getReplacementSortRank(leftEmployee);
+        const rightStatus = this.getReplacementSortRank(rightEmployee);
 
-    return this.employees.filter(
-      (employee) =>
-        employee.isActive &&
-        employee.jobRole === pendingReplacement.jobRole &&
-        employee.id !== pendingReplacement.employeeId
-    );
+        if (leftStatus !== rightStatus) {
+          return leftStatus - rightStatus;
+        }
+
+        return leftEmployee.fullName.localeCompare(rightEmployee.fullName);
+      });
   }
 
-  protected updateSelectedReplacement(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    this.selectedReplacementEmployeeId = value ? Number(value) : null;
+  protected updateReplacementSearch(event: Event): void {
+    this.replacementSearch = (event.target as HTMLInputElement).value;
   }
 
-  protected applyReplacement(): void {
-    if (!this.board || !this.pendingReplacement || !this.selectedReplacementEmployeeId) {
+  protected applyReplacement(employeeId: number): void {
+    if (!this.board || !this.pendingReplacement) {
       return;
     }
 
     const replacementEmployee = this.employees.find(
-      (employee) => employee.id === Number(this.selectedReplacementEmployeeId)
+      (employee) => employee.id === Number(employeeId)
     );
 
     if (!replacementEmployee) {
@@ -527,12 +702,76 @@ export class ScheduleBoardComponent implements OnInit {
     }
 
     this.successMessage = 'Replacement staged. Save changes to persist it.';
-    this.pendingReplacement = null;
-    this.selectedReplacementEmployeeId = null;
+    this.hasUnsavedChanges = true;
+    this.validationResult = null;
+    this.closeReplacementDrawer();
+  }
+
+  protected getEmployeeInitials(employee: Employee): string {
+    return employee.fullName
+      .split(' ')
+      .map((namePart) => namePart.charAt(0))
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+  }
+
+  protected formatEmployeeRole(employee: Employee): string {
+    return this.formatJobRole(employee.jobRole || 'employee');
+  }
+
+  protected getEmployeeShiftRatio(employee: Employee): string {
+    return `${this.getAssignedShiftCount(employee.id)}/${this.getRequestedShiftCount(employee.id)}`;
+  }
+
+  protected isEmployeeAvailableForPendingShift(employee: Employee): boolean {
+    if (!this.pendingReplacement) {
+      return false;
+    }
+
+    return (
+      this.availableShiftIdsByEmployeeId
+        .get(employee.id)
+        ?.has(this.pendingReplacement.shiftId) || false
+    );
+  }
+
+  protected isEmployeeScheduledForPendingShift(employee: Employee): boolean {
+    if (!this.board || !this.pendingReplacement) {
+      return false;
+    }
+
+    return this.board.days.some((day) =>
+      day.shifts.some(
+        (shift) =>
+          shift.shiftId === this.pendingReplacement?.shiftId &&
+          shift.roleGroups.some((roleGroup) =>
+            roleGroup.assignedWorkers.some(
+              (worker) => worker.employeeId === employee.id
+            )
+          )
+      )
+    );
+  }
+
+  private getReplacementSortRank(employee: Employee): number {
+    if (employee.isActive === false) {
+      return 3;
+    }
+
+    if (this.isEmployeeScheduledForPendingShift(employee)) {
+      return 2;
+    }
+
+    if (this.isEmployeeAvailableForPendingShift(employee)) {
+      return 0;
+    }
+
+    return 1;
   }
 
   protected saveChanges(): void {
-    if (!this.board?.scheduleId) {
+    if (!this.board?.scheduleId || !this.canSaveScheduleAssignments()) {
       return;
     }
 
@@ -550,6 +789,7 @@ export class ScheduleBoardComponent implements OnInit {
         next: (board) => {
           this.board = board;
           this.successMessage = 'Schedule changes saved.';
+          this.hasUnsavedChanges = false;
           this.isLoading = false;
         },
         error: (error: unknown) => {
@@ -573,6 +813,31 @@ export class ScheduleBoardComponent implements OnInit {
       .subscribe({
         next: (result) => {
           this.validationResult = result;
+          this.isLoading = false;
+        },
+        error: (error: unknown) => {
+          this.errorMessage = this.resolveErrorMessage(error);
+          this.isLoading = false;
+        }
+      });
+  }
+
+  protected publishSchedule(): void {
+    if (!this.board?.scheduleId || !this.canManageSchedule()) {
+      return;
+    }
+
+    this.isLoading = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    this.scheduleApiService
+      .publishSchedule(this.board.scheduleId)
+      .subscribe({
+        next: (board) => {
+          this.board = board;
+          this.successMessage = 'Schedule published.';
+          this.hasUnsavedChanges = false;
           this.isLoading = false;
         },
         error: (error: unknown) => {
@@ -619,7 +884,7 @@ export class ScheduleBoardComponent implements OnInit {
     return assignedCounts;
   }
 
-  private getProblemShiftIds(filter: 'issues' | 'strength'): Set<number> {
+  private getProblemShiftIds(filter: 'gaps' | 'strength'): Set<number> {
     const problemShiftIds = new Set<number>();
 
     if (!this.board) {
@@ -631,12 +896,12 @@ export class ScheduleBoardComponent implements OnInit {
         const hasUnfilledSlot = shift.roleGroups.some(
           (roleGroup) => (roleGroup.uncoveredSlots || 0) > 0
         );
-        const hasStrengthRisk = shift.roleGroups.some(
-          (roleGroup) => roleGroup.meetsStrengthTarget === false
+        const hasStrengthRisk = shift.roleGroups.some((roleGroup) =>
+          this.isRoleGroupBelowStrength(roleGroup)
         );
 
         if (
-          (filter === 'issues' && (hasUnfilledSlot || hasStrengthRisk)) ||
+          (filter === 'gaps' && hasUnfilledSlot) ||
           (filter === 'strength' && hasStrengthRisk)
         ) {
           problemShiftIds.add(shift.shiftId);
@@ -645,6 +910,41 @@ export class ScheduleBoardComponent implements OnInit {
     }
 
     return problemShiftIds;
+  }
+
+  private getProblemRoleGroupKeys(filter: 'gaps' | 'strength'): Set<string> {
+    const problemRoleGroupKeys = new Set<string>();
+
+    if (!this.board) {
+      return problemRoleGroupKeys;
+    }
+
+    for (const day of this.board.days) {
+      for (const shift of day.shifts) {
+        for (const roleGroup of shift.roleGroups) {
+          const hasProblem =
+            filter === 'gaps'
+              ? (roleGroup.uncoveredSlots || 0) > 0
+              : this.isRoleGroupBelowStrength(roleGroup);
+
+          if (hasProblem) {
+            problemRoleGroupKeys.add(`${shift.shiftId}:${roleGroup.jobRole}`);
+          }
+        }
+      }
+    }
+
+    return problemRoleGroupKeys;
+  }
+
+  private isRoleGroupBelowStrength(roleGroup: {
+    assignedStrengthScore?: number;
+    requiredStrengthScore?: number;
+  }): boolean {
+    const assignedStrength = roleGroup.assignedStrengthScore || 0;
+    const requiredStrength = roleGroup.requiredStrengthScore || 0;
+
+    return requiredStrength > 0 && assignedStrength < requiredStrength;
   }
 
   private formatShiftType(shift: ScheduleShift): string {
@@ -657,6 +957,96 @@ export class ScheduleBoardComponent implements OnInit {
       dayOffset
     );
     this.loadSchedule();
+
+    if (this.canReplaceScheduleWorkers()) {
+      this.loadReplacementAvailability();
+    }
+  }
+
+  private loadReplacementAvailability(): void {
+    this.availabilityApiService
+      .getAllAvailability(this.selectedWeekStartDate)
+      .subscribe({
+        next: (availability) => {
+          this.availableShiftIdsByEmployeeId = new Map(
+            availability.submissions.map((submission) => [
+              submission.employeeId,
+              new Set(submission.shiftIds)
+            ])
+          );
+        },
+        error: () => {
+          this.availableShiftIdsByEmployeeId = new Map();
+        }
+      });
+  }
+
+  protected clearSchedule(): void {
+    if (!this.board?.scheduleId) {
+      return;
+    }
+
+    const confirmed = window.confirm('Are you sure you want to delete this schedule?');
+
+    if (!confirmed) {
+      return;
+    }
+
+    this.isLoading = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+    this.validationResult = null;
+
+    this.scheduleApiService
+      .clearScheduleAssignments(this.board.scheduleId)
+      .subscribe({
+        next: (board) => {
+          this.board = board.days.length ? board : null;
+          this.successMessage = 'Schedule cleared.';
+          this.hasUnsavedChanges = false;
+          this.showEmployeesUnderTarget = false;
+          this.isLoading = false;
+        },
+        error: (error: unknown) => {
+          this.errorMessage = this.resolveErrorMessage(error);
+          this.isLoading = false;
+        }
+      });
+  }
+
+  private getAssignedShiftCount(employeeId: number): number {
+    return this.getAssignedCountsByEmployee().get(employeeId) || 0;
+  }
+
+  private getRequestedShiftCount(employeeId: number): number {
+    return this.availableShiftIdsByEmployeeId.get(employeeId)?.size || 0;
+  }
+
+  private calculateTargetShifts(employee: Employee, requestedShifts: number): number {
+    const strengthScore = this.calculateEmployeeStrength(employee);
+    const normalizedStrength = strengthScore / 10;
+
+    return Number((requestedShifts * (0.55 + 0.45 * normalizedStrength)).toFixed(1));
+  }
+
+  private calculateEmployeeStrength(employee: Employee): number {
+    const seniorityScore = Math.min(10, ((employee.seniorityMonths || 0) / 24) * 10);
+
+    return (
+      0.35 * (employee.professionalism || 0) +
+      0.3 * (employee.responsibility || 0) +
+      0.2 * (employee.pressureHandling || 0) +
+      0.1 * seniorityScore +
+      0.05 * (employee.potential || 0)
+    );
+  }
+
+  private formatJobRole(jobRole: string): string {
+    if (jobRole === 'shift_leader') {
+      return 'Shift manager';
+    }
+
+    return jobRole.replace('_', ' ');
   }
 
   private addDays(dateKey: string, dayOffset: number): string {

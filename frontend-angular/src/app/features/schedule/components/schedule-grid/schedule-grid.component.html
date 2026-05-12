@@ -32,21 +32,21 @@
                         [class.role-group--optimal]="getRoleGroupStatus(roleGroup) === 'optimal'"
                         [class.role-group--covered]="getRoleGroupStatus(roleGroup) === 'covered'"
                         [class.role-group--understaffed]="getRoleGroupStatus(roleGroup) === 'understaffed'"
+                        [class.role-group--highlighted]="isRoleGroupHighlighted(shift, roleGroup)"
                       >
                         <header class="role-group__header">
                           <div>
                             <h3>{{ roleGroup.label }}</h3>
-                            <p>{{ roleGroup.assignedCount }}/{{ roleGroup.requiredCount }}</p>
+                            <p>
+                              {{ roleGroup.assignedCount }}/{{ roleGroup.requiredCount }}
+                              @if (roleGroup.requestedCount !== undefined) {
+                                <span>- {{ roleGroup.requestedCount }} available</span>
+                              }
+                            </p>
                           </div>
 
                           <span>{{ getRoleGroupStatusLabel(roleGroup) }}</span>
                         </header>
-
-                        @if (roleGroup.requestedCount !== undefined) {
-                          <p class="role-group__metric">
-                            {{ roleGroup.requestedCount }} available
-                          </p>
-                        }
 
                         <div class="worker-list">
                           @for (worker of roleGroup.assignedWorkers; track worker.employeeId) {
@@ -54,22 +54,21 @@
                               class="worker-row"
                               type="button"
                               [disabled]="!canManage"
-                              (click)="requestReplacement(shift, roleGroup, worker)"
+                              (click)="requestReplacement(day, shift, roleGroup, worker)"
                             >
                               <span class="worker-row__avatar">
                                 {{ getWorkerInitials(worker) }}
                               </span>
 
                               <span class="worker-row__body">
-                                <span class="worker-row__main">
-                                  <strong>{{ worker.fullName }}</strong>
-                                  <span>{{ formatJobRole(worker.jobRole) }}</span>
-                                </span>
+                                <span class="worker-row__name">{{ worker.fullName }}</span>
 
                                 @if (worker.strengthScore !== undefined) {
                                   <span class="worker-row__metrics">
-                                    Str {{ worker.strengthScore }} |
-                                    {{ worker.assignedShiftCount }}/{{ worker.requestedShiftCount }}
+                                    Str {{ worker.strengthScore }}
+                                    @if (worker.assignedShiftCount !== undefined && worker.requestedShiftCount !== undefined) {
+                                      - {{ worker.assignedShiftCount }}/{{ worker.requestedShiftCount }}
+                                    }
                                   </span>
                                 }
                               </span>
@@ -81,7 +80,7 @@
 
                         @if (roleGroup.assignedStrengthScore !== undefined) {
                           <footer class="role-group__footer">
-                            Strength <strong>{{ roleGroup.assignedStrengthScore }}</strong>/<span>{{ roleGroup.requiredStrengthScore }}</span>
+                            Strength {{ roleGroup.assignedStrengthScore }} / {{ roleGroup.requiredStrengthScore }}
                           </footer>
                         }
                       </section>

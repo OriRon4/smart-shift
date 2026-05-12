@@ -23,4 +23,11 @@ export class EmployeesApiService {
   updateEmployee(employee: Employee): Observable<EmployeeResponse> {
     return this.http.patch<EmployeeResponse>(`${this.apiUrl}/${employee.id}`, employee);
   }
+
+  deactivateEmployee(employeeId: number): Observable<EmployeeResponse> {
+    return this.http.patch<EmployeeResponse>(
+      `${this.apiUrl}/${employeeId}/deactivate`,
+      {}
+    );
+  }
 }
