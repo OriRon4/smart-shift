@@ -7,6 +7,10 @@ import { AvailabilityResponse } from '../../../availability/models/availability.
 import { AvailabilityApiService } from '../../../availability/services/availability-api.service';
 import { Employee } from '../../models/employee.models';
 import { EmployeesApiService } from '../../services/employees-api.service';
+import {
+  addDaysToDateKey,
+  getCurrentWeekStartDate
+} from '../../../../shared/date/week-date.util';
 
 @Component({
   selector: 'app-employees-page',
@@ -21,10 +25,11 @@ export class EmployeesPageComponent implements OnInit {
   protected isLoading = false;
   protected errorMessage = '';
   protected successMessage = '';
-  protected availabilityWeekStartDate = '2026-04-19';
+  protected availabilityWeekStartDate = getCurrentWeekStartDate();
   protected employeeAvailability: AvailabilityResponse | null = null;
   protected selectedAvailabilityShiftIds = new Set<number>();
   protected isAvailabilityLoading = false;
+  protected isAvailabilityReviewOpen = false;
   protected readonly currentUser = this.authService.currentUser;
 
   protected readonly jobRoles = [
@@ -58,6 +63,10 @@ export class EmployeesPageComponent implements OnInit {
       return false;
     }
 
+    if (employee.setupStatus === 'pending') {
+      return true;
+    }
+
     return (
       (employee.professionalism || 0) === 0 &&
       (employee.responsibility || 0) === 0 &&
@@ -65,6 +74,10 @@ export class EmployeesPageComponent implements OnInit {
       (employee.potential || 0) === 0 &&
       (employee.seniorityMonths || 0) === 0
     );
+  }
+
+  protected shouldShowSetupStatus(employee: Employee | null): boolean {
+    return this.canEdit() && this.needsManagerSetup(employee);
   }
 
   protected formatJobRole(jobRole: string | undefined): string {
@@ -108,11 +121,10 @@ export class EmployeesPageComponent implements OnInit {
       next: (response) => {
         this.selectedEmployee = response.employee;
         this.editableEmployee = { ...response.employee };
+        this.isAvailabilityReviewOpen = false;
+        this.employeeAvailability = null;
+        this.selectedAvailabilityShiftIds = new Set();
         this.isLoading = false;
-
-        if (this.canEdit()) {
-          this.loadEmployeeAvailability();
-        }
       },
       error: (error: unknown) => {
         this.errorMessage = this.resolveErrorMessage(error);
@@ -142,39 +154,6 @@ export class EmployeesPageComponent implements OnInit {
         this.isLoading = false;
       }
     });
-  }
-
-  protected deactivateEmployee(): void {
-    if (!this.editableEmployee || !this.canEdit()) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      'Are you sure you want to deactivate this employee?\nThis employee will no longer be available for future schedules.'
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    this.isLoading = true;
-    this.errorMessage = '';
-    this.successMessage = '';
-
-    this.employeesApiService
-      .deactivateEmployee(this.editableEmployee.id)
-      .subscribe({
-        next: (response) => {
-          this.selectedEmployee = response.employee;
-          this.editableEmployee = { ...response.employee };
-          this.successMessage = 'Employee deactivated.';
-          this.loadEmployees();
-        },
-        error: (error: unknown) => {
-          this.errorMessage = this.resolveErrorMessage(error);
-          this.isLoading = false;
-        }
-      });
   }
 
   protected updateStringField(
@@ -227,6 +206,19 @@ export class EmployeesPageComponent implements OnInit {
       -7
     );
     this.loadEmployeeAvailability();
+  }
+
+  protected openAvailabilityReview(): void {
+    if (!this.canEdit()) {
+      return;
+    }
+
+    this.isAvailabilityReviewOpen = true;
+    this.loadEmployeeAvailability();
+  }
+
+  protected closeAvailabilityReview(): void {
+    this.isAvailabilityReviewOpen = false;
   }
 
   protected nextAvailabilityWeek(): void {
@@ -320,14 +312,7 @@ export class EmployeesPageComponent implements OnInit {
   }
 
   private addDays(dateKey: string, dayOffset: number): string {
-    const date = new Date(`${dateKey}T00:00:00`);
-    date.setDate(date.getDate() + dayOffset);
-
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
+    return addDaysToDateKey(dateKey, dayOffset);
   }
 
   private resolveErrorMessage(error: unknown): string {

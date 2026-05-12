@@ -27,7 +27,7 @@ export class PermissionService {
   }
 
   canReplaceScheduleWorkers(user: AuthUser | null): boolean {
-    return this.isManager(user) || this.isShiftLeader(user);
+    return this.isManager(user);
   }
 
   canSaveScheduleAssignments(user: AuthUser | null): boolean {

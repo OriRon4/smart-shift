@@ -92,6 +92,7 @@ async function getActiveScheduleEmployees() {
         full_name,
         role,
         is_active,
+        setup_status,
         professionalism,
         responsibility,
         pressure_handling,
@@ -100,6 +101,7 @@ async function getActiveScheduleEmployees() {
       FROM employees
       WHERE role IN (?)
         AND is_active = TRUE
+        AND setup_status = 'complete'
       ORDER BY role, id
     `,
     [scheduleRoleValues]
@@ -116,6 +118,7 @@ async function getAllEmployees() {
         full_name,
         role,
         is_active,
+        setup_status,
         professionalism,
         responsibility,
         pressure_handling,
@@ -150,6 +153,63 @@ async function getShiftsByWeek(weekStartDate) {
   );
 
   return rows;
+}
+
+async function getShiftById(shiftId) {
+  const [rows] = await pool.query(
+    `
+      SELECT
+        id,
+        shift_date,
+        shift_type,
+        required_waiters,
+        required_bartenders,
+        required_shift_leaders,
+        required_strength_score
+      FROM shifts
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [shiftId]
+  );
+
+  return rows[0] || null;
+}
+
+async function updateShiftRequiredStrength(shiftId, requiredStrengthScore) {
+  await pool.query(
+    `
+      UPDATE shifts
+      SET required_strength_score = ?
+      WHERE id = ?
+    `,
+    [requiredStrengthScore, shiftId]
+  );
+
+  return getShiftById(shiftId);
+}
+
+async function updateShiftRequirements(shiftId, requirements) {
+  await pool.query(
+    `
+      UPDATE shifts
+      SET
+        required_waiters = ?,
+        required_bartenders = ?,
+        required_shift_leaders = ?,
+        required_strength_score = ?
+      WHERE id = ?
+    `,
+    [
+      requirements.requiredWaiters,
+      requirements.requiredBartenders,
+      requirements.requiredShiftLeaders,
+      requirements.requiredStrengthScore,
+      shiftId,
+    ]
+  );
+
+  return getShiftById(shiftId);
 }
 
 async function getShiftRequestsByWeek(weekStartDate) {
@@ -484,11 +544,54 @@ async function publishSchedule(scheduleId) {
   }
 }
 
+async function unpublishSchedule(scheduleId) {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const schedule = await getWeeklyScheduleById(connection, scheduleId);
+
+    if (!schedule) {
+      const error = new Error("Schedule not found");
+      error.statusCode = 404;
+      throw error;
+    }
+
+    await connection.query(
+      `
+        UPDATE weekly_schedules
+        SET published_at = NULL,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+      `,
+      [scheduleId]
+    );
+
+    const unpublishedSchedule = await getWeeklyScheduleById(connection, scheduleId);
+    await connection.commit();
+
+    return {
+      scheduleId,
+      weekStartDate: formatDateKey(unpublishedSchedule.week_start_date),
+      publishedAt: null,
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   ensureWeeklyShifts,
   getActiveScheduleEmployees,
   getAllEmployees,
   getShiftsByWeek,
+  getShiftById,
+  updateShiftRequiredStrength,
+  updateShiftRequirements,
   getShiftRequestsByWeek,
   getScheduleInputsByWeek,
   getWeeklyScheduleByWeekStartDate,
@@ -498,4 +601,5 @@ module.exports = {
   saveScheduleAssignments,
   clearScheduleAssignments,
   publishSchedule,
+  unpublishSchedule,
 };

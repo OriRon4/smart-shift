@@ -52,9 +52,9 @@ INSERT IGNORE INTO users (
   is_active
 )
 VALUES
-  (1, 22, 'manager', 'manager@example.com', 'password', 'manager', TRUE),
-  (2, 20, 'leader', 'leader@example.com', 'password', 'shift_leader', TRUE),
-  (3, 1, 'employee', 'employee@example.com', 'password', 'employee', TRUE);
+  (1, 22, 'manager', 'manager@example.com', '$2b$12$JgJKGdHMJHTop3NN8QVbbOKGIPeiIpDq4YYQG.rMuMs6IgAnnijfe', 'manager', TRUE),
+  (2, 20, 'leader', 'leader@example.com', '$2b$12$JgJKGdHMJHTop3NN8QVbbOKGIPeiIpDq4YYQG.rMuMs6IgAnnijfe', 'shift_leader', TRUE),
+  (3, 1, 'employee', 'employee@example.com', '$2b$12$JgJKGdHMJHTop3NN8QVbbOKGIPeiIpDq4YYQG.rMuMs6IgAnnijfe', 'employee', TRUE);
 
 INSERT IGNORE INTO shift_requests (
   employee_id,

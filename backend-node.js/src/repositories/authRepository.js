@@ -81,13 +81,14 @@ async function createWorkerUser(worker) {
           full_name,
           role,
           is_active,
+          setup_status,
           professionalism,
           responsibility,
           pressure_handling,
           seniority_months,
           potential
         )
-        VALUES (?, 'waiter', TRUE, 0, 0, 0, 0, 0)
+        VALUES (?, 'waiter', FALSE, 'pending', 0, 0, 0, 0, 0)
       `,
       [worker.fullName]
     );
@@ -106,7 +107,7 @@ async function createWorkerUser(worker) {
         )
         VALUES (?, ?, ?, ?, 'employee', TRUE)
       `,
-      [employeeId, worker.username, worker.email, worker.password]
+      [employeeId, worker.username, worker.email, worker.passwordHash]
     );
 
     await connection.commit();
@@ -120,8 +121,20 @@ async function createWorkerUser(worker) {
   }
 }
 
+async function updateUserPasswordHash(userId, passwordHash) {
+  await pool.query(
+    `
+      UPDATE users
+      SET password_hash = ?
+      WHERE id = ?
+    `,
+    [passwordHash, userId]
+  );
+}
+
 module.exports = {
   findUserByLogin,
   findUserById,
   createWorkerUser,
+  updateUserPasswordHash,
 };

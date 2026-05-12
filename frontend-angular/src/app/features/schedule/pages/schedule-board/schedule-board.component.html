@@ -29,14 +29,21 @@
         </span>
       </div>
 
-      @if (canManageSchedule() || canSaveScheduleAssignments()) {
+      @if ((canManageSchedule() || canSaveScheduleAssignments()) && canUseScheduleActions) {
         <div class="schedule-board__manager-actions">
           @if (canManageSchedule()) {
             <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="validateSchedule()">
               Validate schedule
             </button>
-            <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="publishSchedule()">
-              Publish Schedule
+            <button
+              type="button"
+              class="schedule-board__publish-action"
+              [class.schedule-board__publish-action--published]="board?.publishedAt"
+              [class.schedule-board__publish-action--unpublished]="!board?.publishedAt"
+              [disabled]="!board?.scheduleId || isLoading"
+              (click)="publishSchedule()"
+            >
+              {{ publishButtonLabel }}
             </button>
             <button type="button" class="schedule-board__clear-action" [disabled]="!board?.scheduleId || isLoading" (click)="clearSchedule()">
               Clear schedule
@@ -60,7 +67,13 @@
       </section>
     }
 
-    @if (board?.summary && canManageSchedule()) {
+    @if (actionErrorMessage) {
+      <section class="schedule-board__notice schedule-board__notice--inline-error">
+        {{ actionErrorMessage }}
+      </section>
+    }
+
+      @if (board?.summary && canManageSchedule()) {
       <section class="schedule-board__summary-cards" aria-label="Schedule summary">
         <button
           type="button"
@@ -109,10 +122,11 @@
 
           @if (showEmployeesUnderTarget) {
             <section class="kpi-popover">
+              <p class="kpi-popover__hint">Assigned / Target</p>
               @for (employee of employeesUnderTarget; track employee.employeeId) {
                 <div>
                   <strong>{{ employee.fullName }}</strong>
-                  <span>{{ employee.assigned }} / {{ employee.target }} target - requested {{ employee.requested }} - gap {{ employee.gap }}</span>
+                  <span>{{ employee.assigned }} / {{ employee.target }}</span>
                 </div>
               } @empty {
                 <p>No employees are significantly under target.</p>
@@ -146,31 +160,38 @@
         </label>
 
         <div class="replacement-legend" aria-label="Replacement legend">
-          <span><i class="badge-dot badge-dot--available"></i> submitted availability</span>
-          <span><i class="badge-dot badge-dot--scheduled"></i> already scheduled</span>
+          <span><i class="badge-dot badge-dot--available"></i> Available = submitted availability for this shift</span>
+          <span><i class="badge-dot badge-dot--scheduled"></i> Scheduled = already assigned / works same day</span>
         </div>
 
         <div class="replacement-list">
-          @for (employee of getReplacementCandidates(); track employee.id) {
-            <article class="replacement-row">
-              <span class="replacement-row__avatar">{{ getEmployeeInitials(employee) }}</span>
-              <div class="replacement-row__main">
-                <strong>{{ employee.fullName }}</strong>
-                <span>{{ formatEmployeeRole(employee) }} - {{ getEmployeeShiftRatio(employee) }}</span>
-                <div class="replacement-row__badges">
-                  @if (isEmployeeAvailableForPendingShift(employee)) {
-                    <span class="replacement-badge replacement-badge--available">Available</span>
-                  }
-                  @if (isEmployeeScheduledForPendingShift(employee)) {
-                    <span class="replacement-badge replacement-badge--scheduled">Scheduled</span>
-                  }
-                  @if (employee.isActive === false) {
-                    <span class="replacement-badge replacement-badge--inactive">Inactive</span>
-                  }
-                </div>
-              </div>
-              <button type="button" (click)="applyReplacement(employee.id)">Replace</button>
-            </article>
+          @for (section of getReplacementSections(); track section.title) {
+            <section class="replacement-section">
+              <h3>{{ section.title }}</h3>
+              @for (employee of section.employees; track employee.id) {
+                <article class="replacement-row">
+                  <span class="replacement-row__avatar">{{ getEmployeeInitials(employee) }}</span>
+                  <div class="replacement-row__main">
+                    <strong>{{ employee.fullName }}</strong>
+                    <span>{{ formatEmployeeRole(employee) }} - {{ getEmployeeTargetRatio(employee) }}</span>
+                    <div class="replacement-row__badges">
+                      @if (isEmployeeAvailableForPendingShift(employee)) {
+                        <span class="replacement-badge replacement-badge--available">Available</span>
+                      }
+                      @if (isEmployeeScheduledForPendingShift(employee)) {
+                        <span class="replacement-badge replacement-badge--scheduled">Scheduled</span>
+                      } @else if (isEmployeeWorkingSameDay(employee)) {
+                        <span class="replacement-badge replacement-badge--same-day">Works same day</span>
+                      }
+                      @if (employee.isActive === false) {
+                        <span class="replacement-badge replacement-badge--inactive">Inactive</span>
+                      }
+                    </div>
+                  </div>
+                  <button type="button" (click)="applyReplacement(employee.id)">Replace</button>
+                </article>
+              }
+            </section>
           } @empty {
             <p class="replacement-list__empty">No employees match this search.</p>
           }
@@ -201,14 +222,24 @@
           <p>{{ errorMessage }}</p>
         </div>
       </section>
-    } @else if (board) {
+    } @else if (isScheduleHiddenForViewer) {
+      <section class="schedule-board__state">
+        <div class="schedule-board__state-card">
+          <strong>Schedule has not been published yet.</strong>
+          <p>The schedule is not published yet.</p>
+        </div>
+      </section>
+    } @else if (board?.days?.length) {
       <app-schedule-grid
         [board]="board"
         [canManage]="canReplaceScheduleWorkers()"
+        [canEditRequiredStrength]="canManageSchedule()"
         [activeShiftIds]="activeShiftIds"
         [activeRoleGroupKeys]="activeRoleGroupKeys"
         [onlyShowActive]="boardFilter !== 'all'"
         (replaceAssignment)="openReplacement($event)"
+        (removeAssignment)="removeAssignment($event)"
+        (updateRequiredStrength)="updateShiftRequiredStrength($event)"
       />
     } @else {
       <section class="schedule-board__state">

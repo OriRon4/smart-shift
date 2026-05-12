@@ -34,7 +34,7 @@
           class="employee-row"
           [disabled]="!canViewDetails()"
           [class.employee-row--active]="selectedEmployee?.id === employee.id"
-          [class.employee-row--needs-setup]="needsManagerSetup(employee)"
+          [class.employee-row--needs-setup]="shouldShowSetupStatus(employee)"
           (click)="openEmployee(employee)"
         >
           <span class="employee-row__identity">
@@ -43,8 +43,8 @@
           </span>
           <span>{{ formatJobRole(employee.jobRole) }}</span>
           <span>
-            @if (needsManagerSetup(employee)) {
-              Needs setup
+            @if (shouldShowSetupStatus(employee)) {
+              Pending setup
             } @else if (employee.isActive === false) {
               Inactive
             } @else {
@@ -68,9 +68,9 @@
             <span>{{ canEdit() ? 'Editable profile' : 'Read-only profile' }}</span>
             <h2>{{ editableEmployee.fullName }}</h2>
             <p>{{ formatJobRole(editableEmployee.jobRole) }}</p>
-            @if (needsManagerSetup(editableEmployee)) {
+            @if (shouldShowSetupStatus(editableEmployee)) {
               <small class="employee-card__setup-warning">
-                Manager setup required: choose final role and quality scores.
+                This employee is waiting for manager setup.
               </small>
             }
           </div>
@@ -136,15 +136,23 @@
         </label>
 
         @if (canEdit()) {
+          <button type="button" class="employee-card__secondary-action" (click)="openAvailabilityReview()">
+            Review Availability
+          </button>
+        }
+
+        @if (canEdit() && isAvailabilityReviewOpen) {
           <section class="employee-availability">
             <header class="employee-availability__header">
               <div>
-                <span>Availability</span>
+                <span>Editing availability for</span>
+                <h3>{{ editableEmployee.fullName }}</h3>
                 <strong>{{ availabilityWeekStartDate }}</strong>
               </div>
               <div>
                 <button type="button" (click)="previousAvailabilityWeek()" [disabled]="isAvailabilityLoading">&lt;</button>
                 <button type="button" (click)="nextAvailabilityWeek()" [disabled]="isAvailabilityLoading">&gt;</button>
+                <button type="button" (click)="closeAvailabilityReview()" [disabled]="isAvailabilityLoading">Close</button>
               </div>
             </header>
 
@@ -180,14 +188,6 @@
 
         @if (canEdit()) {
           <button type="submit" [disabled]="isLoading">Save employee</button>
-          <button
-            type="button"
-            class="employee-card__deactivate"
-            [disabled]="isLoading || editableEmployee.isActive === false"
-            (click)="deactivateEmployee()"
-          >
-            Deactivate employee
-          </button>
         }
       </form>
     } @else if (!canViewDetails()) {

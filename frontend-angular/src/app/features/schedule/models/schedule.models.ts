@@ -29,6 +29,7 @@ export interface ScheduleDay {
 export interface ScheduleShift {
   shiftId: number;
   shiftType: ScheduleShiftType;
+  requiredStrengthScore?: number;
   roleGroups: ScheduleRoleGroup[];
 }
 
@@ -58,6 +59,14 @@ export interface SaveScheduleAssignment {
   shiftId: number;
   employeeId: number;
   jobRole: JobRole;
+}
+
+export interface ShiftRequirementsUpdate {
+  shiftId: number;
+  requiredWaiters: number;
+  requiredBartenders: number;
+  requiredShiftLeaders: number;
+  requiredStrengthScore: number;
 }
 
 export interface ScheduleValidationResponse {

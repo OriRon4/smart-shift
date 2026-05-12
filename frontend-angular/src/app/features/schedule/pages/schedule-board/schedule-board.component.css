@@ -128,6 +128,18 @@
   color: #7a5216;
 }
 
+.schedule-board__manager-actions .schedule-board__publish-action--unpublished {
+  border-color: #b85b54;
+  background: #fff4f2;
+  color: #8f312a;
+}
+
+.schedule-board__manager-actions .schedule-board__publish-action--published {
+  border-color: #7fc99a;
+  background: #edf9f1;
+  color: #16603b;
+}
+
 .schedule-board__manager-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -236,6 +248,12 @@
   color: #16603b;
 }
 
+.schedule-board__notice--inline-error {
+  border-color: #efc8c4;
+  background: #fff8f6;
+  color: #8f312a;
+}
+
 .schedule-board__state {
   display: grid;
   height: 100%;
@@ -267,6 +285,225 @@
 
 .schedule-board__state--error .schedule-board__state-card strong {
   color: #9d2924;
+}
+
+.replacement-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  border: 0;
+  background: rgba(23, 35, 49, 0.18);
+}
+
+.replacement-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 21;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 14px;
+  width: min(460px, 100vw);
+  height: 100vh;
+  border-left: 1px solid #d9e1eb;
+  background: #ffffff;
+  box-shadow: -24px 0 48px rgba(27, 44, 66, 0.16);
+  padding: 18px;
+}
+
+.replacement-drawer__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.replacement-drawer__header span {
+  color: #1d6f8f;
+  font-size: 0.7rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.replacement-drawer__header h2 {
+  margin: 5px 0;
+  color: #172331;
+  font-size: 1.2rem;
+}
+
+.replacement-drawer__header p {
+  margin: 0;
+  color: #66778a;
+  font-size: 0.86rem;
+}
+
+.replacement-drawer__header button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #c7d2df;
+  border-radius: 9px;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.replacement-search {
+  display: grid;
+  gap: 7px;
+  color: #34465b;
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.replacement-search input {
+  min-height: 40px;
+  border: 1px solid #c7d2df;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 0 12px;
+}
+
+.replacement-legend {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #e3e9f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #66778a;
+  font-size: 0.72rem;
+  padding: 9px 10px;
+}
+
+.badge-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.badge-dot--available {
+  background: #2f9e62;
+}
+
+.badge-dot--scheduled {
+  background: #d5912b;
+}
+
+.replacement-list {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.replacement-section {
+  display: grid;
+  gap: 8px;
+}
+
+.replacement-section h3 {
+  margin: 0;
+  border-bottom: 1px solid #e3e9f0;
+  color: #46596d;
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  padding-bottom: 6px;
+  text-transform: uppercase;
+}
+
+.replacement-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e3e9f0;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px;
+}
+
+.replacement-row__avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 10px;
+  background: #e2f3ef;
+  color: #17634d;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.replacement-row__main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.replacement-row__main strong {
+  overflow: hidden;
+  color: #172331;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.replacement-row__main > span {
+  color: #66778a;
+  font-size: 0.76rem;
+}
+
+.replacement-row button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: #1d6f8f;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 900;
+  padding: 0 10px;
+}
+
+.replacement-row__badges {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.replacement-badge {
+  border-radius: 999px;
+  font-size: 0.66rem;
+  font-weight: 900;
+  padding: 3px 7px;
+}
+
+.replacement-badge--available {
+  background: #dff6e9;
+  color: #16603b;
+}
+
+.replacement-badge--scheduled {
+  background: #fff1d0;
+  color: #8a5a13;
+}
+
+.replacement-badge--same-day {
+  background: #e8eef5;
+  color: #46596d;
+}
+
+.replacement-badge--inactive {
+  background: #eef2f6;
+  color: #66778a;
+}
+
+.replacement-list__empty {
+  color: #66778a;
+  margin: 0;
 }
 
 @media (max-width: 1180px) {

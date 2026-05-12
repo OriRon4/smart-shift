@@ -13,6 +13,7 @@ import {
   ScheduleShift
 } from '../../../schedule/models/schedule.models';
 import { ScheduleApiService } from '../../../schedule/services/schedule-api.service';
+import { getCurrentWeekStartDate } from '../../../../shared/date/week-date.util';
 
 interface PersonalShift {
   date: string;
@@ -31,7 +32,7 @@ interface PersonalShift {
   styleUrl: './dashboard-page.component.css'
 })
 export class DashboardPageComponent implements OnInit {
-  protected readonly selectedWeekStartDate = '2026-04-19';
+  protected readonly selectedWeekStartDate = getCurrentWeekStartDate();
   protected readonly currentUser = this.authService.currentUser;
   protected board: ScheduleBoardResponse | null = null;
   protected employees: Employee[] = [];

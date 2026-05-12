@@ -217,7 +217,7 @@
   padding: 0 14px;
 }
 
-.employee-card .employee-card__deactivate {
+.employee-card .employee-card__secondary-action {
   border: 1px solid #d5af63;
   background: #fffaf0;
   color: #7a5216;
@@ -253,6 +253,108 @@
 .employees-table__empty {
   color: #66778a;
   padding: 12px;
+}
+
+.employee-availability {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #d9e1eb;
+  border-radius: 14px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.employee-availability__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.employee-availability__header span {
+  color: #1d6f8f;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.employee-availability__header h3 {
+  margin: 3px 0;
+  color: #172331;
+  font-size: 1rem;
+}
+
+.employee-availability__header strong {
+  color: #66778a;
+  font-size: 0.78rem;
+}
+
+.employee-availability__header > div:last-child {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.employee-availability__header button,
+.employee-availability > button {
+  min-height: 34px;
+  border: 1px solid #c7d2df;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #173247;
+  cursor: pointer;
+  font-weight: 900;
+  padding: 0 10px;
+}
+
+.employee-availability > button {
+  border: 0;
+  background: #1d6f8f;
+  color: #ffffff;
+}
+
+.employee-availability__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.employee-availability__day {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #e3e9f0;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 8px;
+}
+
+.employee-availability__day strong {
+  color: #172331;
+  font-size: 0.8rem;
+}
+
+.employee-availability__day button {
+  min-height: 32px;
+  border: 1px solid #c7d2df;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #34465b;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.employee-availability__day .employee-availability__shift--selected {
+  border-color: #1d6f8f;
+  background: #e4f4f1;
+  color: #115a48;
+  box-shadow: inset 0 0 0 1px rgba(29, 111, 143, 0.18);
+}
+
+.employee-availability__empty {
+  color: #66778a;
+  margin: 0;
 }
 
 @media (max-width: 1080px) {

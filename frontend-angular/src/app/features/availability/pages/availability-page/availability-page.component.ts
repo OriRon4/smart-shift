@@ -4,6 +4,10 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { WeekSelectorComponent } from '../../../schedule/components/week-selector/week-selector.component';
 import { AvailabilityResponse } from '../../models/availability.models';
 import { AvailabilityApiService } from '../../services/availability-api.service';
+import {
+  addDaysToDateKey,
+  getCurrentWeekStartDate
+} from '../../../../shared/date/week-date.util';
 
 @Component({
   selector: 'app-availability-page',
@@ -15,7 +19,7 @@ import { AvailabilityApiService } from '../../services/availability-api.service'
   styleUrl: './availability-page.component.css'
 })
 export class AvailabilityPageComponent implements OnInit {
-  protected selectedWeekStartDate = '2026-04-19';
+  protected selectedWeekStartDate = getCurrentWeekStartDate();
   protected availability: AvailabilityResponse | null = null;
   protected selectedShiftIds = new Set<number>();
   protected isLoading = false;
@@ -111,17 +115,7 @@ export class AvailabilityPageComponent implements OnInit {
   }
 
   private addDays(dateKey: string, dayOffset: number): string {
-    const date = new Date(`${dateKey}T00:00:00`);
-    date.setDate(date.getDate() + dayOffset);
-    return this.formatDateKey(date);
-  }
-
-  private formatDateKey(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
+    return addDaysToDateKey(dateKey, dayOffset);
   }
 
   private formatDisplayDate(dateKey: string): string {

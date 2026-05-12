@@ -3,6 +3,7 @@ CREATE TABLE employees (
   full_name VARCHAR(100) NOT NULL,
   role VARCHAR(30) NOT NULL DEFAULT 'waiter',
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  setup_status ENUM('pending', 'complete') NOT NULL DEFAULT 'complete',
   professionalism TINYINT UNSIGNED NOT NULL,
   responsibility TINYINT UNSIGNED NOT NULL,
   pressure_handling TINYINT UNSIGNED NOT NULL,

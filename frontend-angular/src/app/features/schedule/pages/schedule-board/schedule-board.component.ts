@@ -10,8 +10,10 @@ import {
   JobRole,
   SaveScheduleAssignment,
   ScheduleBoardResponse,
+  ScheduleRoleGroup,
   ScheduleShift,
-  ScheduleValidationResponse
+  ScheduleValidationResponse,
+  ShiftRequirementsUpdate
 } from '../../models/schedule.models';
 import { ScheduleApiService } from '../../services/schedule-api.service';
 import { AuthService } from '../../../../core/auth/auth.service';
@@ -19,6 +21,10 @@ import { PermissionService } from '../../../../core/permissions/permission.servi
 import { Employee } from '../../../employees/models/employee.models';
 import { EmployeesApiService } from '../../../employees/services/employees-api.service';
 import { AvailabilityApiService } from '../../../availability/services/availability-api.service';
+import {
+  addDaysToDateKey,
+  getCurrentWeekStartDate
+} from '../../../../shared/date/week-date.util';
 
 @Component({
   selector: 'app-schedule-board',
@@ -31,7 +37,7 @@ import { AvailabilityApiService } from '../../../availability/services/availabil
   styleUrl: './schedule-board.component.css'
 })
 export class ScheduleBoardComponent implements OnInit {
-  protected selectedWeekStartDate = '2026-04-19';
+  protected selectedWeekStartDate = getCurrentWeekStartDate();
   protected board: ScheduleBoardResponse | null = null;
   protected employees: Employee[] = [];
   protected availableShiftIdsByEmployeeId = new Map<number, Set<number>>();
@@ -40,6 +46,7 @@ export class ScheduleBoardComponent implements OnInit {
   protected validationResult: ScheduleValidationResponse | null = null;
   protected isLoading = false;
   protected errorMessage = '';
+  protected actionErrorMessage = '';
   protected successMessage = '';
   protected boardFilter: 'all' | 'gaps' | 'strength' = 'all';
   protected focusedShiftId: number | null = null;
@@ -339,10 +346,23 @@ export class ScheduleBoardComponent implements OnInit {
       return 'Not published yet';
     }
 
-    return `Published at ${new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    }).format(new Date(this.board.publishedAt))}`;
+    return 'Published';
+  }
+
+  protected get publishButtonLabel(): string {
+    return this.board?.publishedAt ? 'Unpublish Schedule' : 'Publish Schedule';
+  }
+
+  protected get isScheduleHiddenForViewer(): boolean {
+    return Boolean(
+      this.board?.scheduleId &&
+        !this.board.publishedAt &&
+        !this.canManageSchedule()
+    );
+  }
+
+  protected get canUseScheduleActions(): boolean {
+    return !this.isScheduleHiddenForViewer;
   }
 
   protected get openIssueCount(): number {
@@ -586,6 +606,7 @@ export class ScheduleBoardComponent implements OnInit {
   protected loadSchedule(): void {
     this.isLoading = true;
     this.errorMessage = '';
+    this.actionErrorMessage = '';
     this.successMessage = '';
     this.validationResult = null;
     this.pendingReplacement = null;
@@ -594,7 +615,7 @@ export class ScheduleBoardComponent implements OnInit {
 
     this.scheduleApiService.getSchedule(this.selectedWeekStartDate).subscribe({
       next: (board) => {
-        this.board = board.days.length ? board : null;
+        this.board = board.scheduleId || board.days.length ? board : null;
         this.isLoading = false;
       },
       error: (error: unknown) => {
@@ -607,6 +628,7 @@ export class ScheduleBoardComponent implements OnInit {
   protected generateSchedule(): void {
     this.isLoading = true;
     this.errorMessage = '';
+    this.actionErrorMessage = '';
     this.successMessage = '';
     this.validationResult = null;
 
@@ -662,6 +684,24 @@ export class ScheduleBoardComponent implements OnInit {
       });
   }
 
+  protected getReplacementSections(): {
+    title: string;
+    employees: Employee[];
+  }[] {
+    const candidates = this.getReplacementCandidates();
+    const sameRoleEmployees = candidates.filter(
+      (employee) => employee.jobRole === this.pendingReplacement?.jobRole
+    );
+    const otherRoleEmployees = candidates.filter(
+      (employee) => employee.jobRole !== this.pendingReplacement?.jobRole
+    );
+
+    return [
+      { title: 'Same role candidates', employees: sameRoleEmployees },
+      { title: 'Other roles', employees: otherRoleEmployees },
+    ].filter((section) => section.employees.length > 0);
+  }
+
   protected updateReplacementSearch(event: Event): void {
     this.replacementSearch = (event.target as HTMLInputElement).value;
   }
@@ -693,18 +733,63 @@ export class ScheduleBoardComponent implements OnInit {
             assignedWorker.employeeId === this.pendingReplacement?.employeeId
         );
 
-        if (worker) {
+        if (roleGroup && worker) {
           worker.employeeId = replacementEmployee.id;
           worker.fullName = replacementEmployee.fullName;
           worker.jobRole = replacementEmployee.jobRole as JobRole;
+          worker.strengthScore = Number(
+            this.calculateEmployeeStrength(replacementEmployee).toFixed(1)
+          );
+          worker.assignedShiftCount = this.getAssignedShiftCount(replacementEmployee.id);
+          worker.requestedShiftCount = this.getRequestedShiftCount(replacementEmployee.id);
+          this.refreshRoleGroupMetrics(roleGroup);
         }
       }
     }
 
     this.successMessage = 'Replacement staged. Save changes to persist it.';
+    this.actionErrorMessage = '';
     this.hasUnsavedChanges = true;
     this.validationResult = null;
     this.closeReplacementDrawer();
+  }
+
+  protected removeAssignment(request: ReplaceAssignmentRequest): void {
+    if (!this.board || !this.canReplaceScheduleWorkers()) {
+      return;
+    }
+
+    const confirmed = window.confirm('Remove this worker from the shift?');
+
+    if (!confirmed) {
+      return;
+    }
+
+    for (const day of this.board.days) {
+      for (const shift of day.shifts) {
+        if (shift.shiftId !== request.shiftId) {
+          continue;
+        }
+
+        const roleGroup = shift.roleGroups.find(
+          (group) => group.jobRole === request.jobRole
+        );
+
+        if (!roleGroup) {
+          continue;
+        }
+
+        roleGroup.assignedWorkers = roleGroup.assignedWorkers.filter(
+          (worker) => worker.employeeId !== request.employeeId
+        );
+        this.refreshRoleGroupMetrics(roleGroup);
+      }
+    }
+
+    this.successMessage = 'Assignment removed. Save changes to persist it.';
+    this.actionErrorMessage = '';
+    this.hasUnsavedChanges = true;
+    this.validationResult = null;
   }
 
   protected getEmployeeInitials(employee: Employee): string {
@@ -754,17 +839,47 @@ export class ScheduleBoardComponent implements OnInit {
     );
   }
 
+  protected isEmployeeWorkingSameDay(employee: Employee): boolean {
+    if (!this.board || !this.pendingReplacement) {
+      return false;
+    }
+
+    return this.board.days.some(
+      (day) =>
+        day.date === this.pendingReplacement?.date &&
+        day.shifts.some((shift) =>
+          shift.roleGroups.some((roleGroup) =>
+            roleGroup.assignedWorkers.some(
+              (worker) => worker.employeeId === employee.id
+            )
+          )
+        )
+    );
+  }
+
+  protected getEmployeeTargetRatio(employee: Employee): string {
+    const assigned = this.getAssignedShiftCount(employee.id);
+    const requested = this.getRequestedShiftCount(employee.id);
+    const target = this.calculateTargetShifts(employee, requested);
+
+    return `${assigned}/${target}`;
+  }
+
   private getReplacementSortRank(employee: Employee): number {
     if (employee.isActive === false) {
-      return 3;
+      return 4;
     }
 
     if (this.isEmployeeScheduledForPendingShift(employee)) {
-      return 2;
+      return 3;
     }
 
     if (this.isEmployeeAvailableForPendingShift(employee)) {
       return 0;
+    }
+
+    if (this.isEmployeeWorkingSameDay(employee)) {
+      return 2;
     }
 
     return 1;
@@ -829,14 +944,20 @@ export class ScheduleBoardComponent implements OnInit {
 
     this.isLoading = true;
     this.errorMessage = '';
+    this.actionErrorMessage = '';
     this.successMessage = '';
 
-    this.scheduleApiService
-      .publishSchedule(this.board.scheduleId)
+    const publishRequest = this.board.publishedAt
+      ? this.scheduleApiService.unpublishSchedule(this.board.scheduleId)
+      : this.scheduleApiService.publishSchedule(this.board.scheduleId);
+
+    publishRequest
       .subscribe({
         next: (board) => {
           this.board = board;
-          this.successMessage = 'Schedule published.';
+          this.successMessage = board.publishedAt
+            ? 'Schedule published.'
+            : 'Schedule unpublished.';
           this.hasUnsavedChanges = false;
           this.isLoading = false;
         },
@@ -845,6 +966,57 @@ export class ScheduleBoardComponent implements OnInit {
           this.isLoading = false;
         }
       });
+  }
+
+  protected updateShiftRequiredStrength(request: ShiftRequirementsUpdate): void {
+    if (!this.canManageSchedule()) {
+      return;
+    }
+
+    this.actionErrorMessage = '';
+    this.successMessage = '';
+    this.validationResult = null;
+
+    this.scheduleApiService
+      .updateShiftRequirements(request)
+      .subscribe({
+        next: (board) => {
+          if (this.isUsableScheduleBoard(board)) {
+            this.board = board;
+            this.successMessage = 'Shift requirements updated.';
+          } else {
+            this.reloadCurrentScheduleAfterAction('Shift requirements updated.');
+          }
+        },
+        error: (error: unknown) => {
+          this.actionErrorMessage = this.resolveErrorMessage(error);
+        }
+      });
+  }
+
+  private isUsableScheduleBoard(
+    board: ScheduleBoardResponse | null | undefined
+  ): board is ScheduleBoardResponse {
+    return Boolean(
+      board &&
+        Array.isArray(board.days) &&
+        board.weekStartDate &&
+        board.weekEndDate
+    );
+  }
+
+  private reloadCurrentScheduleAfterAction(successMessage: string): void {
+    this.scheduleApiService.getSchedule(this.selectedWeekStartDate).subscribe({
+      next: (board) => {
+        if (this.isUsableScheduleBoard(board)) {
+          this.board = board.scheduleId || board.days.length ? board : this.board;
+          this.successMessage = successMessage;
+        }
+      },
+      error: (error: unknown) => {
+        this.actionErrorMessage = this.resolveErrorMessage(error);
+      }
+    });
   }
 
   private flattenAssignments(board: ScheduleBoardResponse): SaveScheduleAssignment[] {
@@ -910,6 +1082,27 @@ export class ScheduleBoardComponent implements OnInit {
     }
 
     return problemShiftIds;
+  }
+
+  private refreshRoleGroupMetrics(roleGroup: ScheduleRoleGroup): void {
+    roleGroup.assignedCount = roleGroup.assignedWorkers.length;
+    roleGroup.uncoveredSlots = Math.max(
+      0,
+      roleGroup.requiredCount - roleGroup.assignedCount
+    );
+
+    if (roleGroup.assignedStrengthScore !== undefined) {
+      roleGroup.assignedStrengthScore = Number(
+        roleGroup.assignedWorkers
+          .reduce((total, worker) => total + (worker.strengthScore || 0), 0)
+          .toFixed(1)
+      );
+    }
+
+    if (roleGroup.requiredStrengthScore !== undefined) {
+      roleGroup.meetsStrengthTarget =
+        (roleGroup.assignedStrengthScore || 0) >= roleGroup.requiredStrengthScore;
+    }
   }
 
   private getProblemRoleGroupKeys(filter: 'gaps' | 'strength'): Set<string> {
@@ -994,6 +1187,7 @@ export class ScheduleBoardComponent implements OnInit {
 
     this.isLoading = true;
     this.errorMessage = '';
+    this.actionErrorMessage = '';
     this.successMessage = '';
     this.validationResult = null;
 
@@ -1050,18 +1244,7 @@ export class ScheduleBoardComponent implements OnInit {
   }
 
   private addDays(dateKey: string, dayOffset: number): string {
-    const date = new Date(`${dateKey}T00:00:00`);
-    date.setDate(date.getDate() + dayOffset);
-
-    return this.formatDateKey(date);
-  }
-
-  private formatDateKey(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
+    return addDaysToDateKey(dateKey, dayOffset);
   }
 
   private formatDisplayDate(dateKey: string): string {

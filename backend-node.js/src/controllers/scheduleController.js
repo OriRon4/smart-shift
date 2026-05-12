@@ -85,6 +85,48 @@ async function publishSchedule(req, res, next) {
   }
 }
 
+async function unpublishSchedule(req, res, next) {
+  try {
+    const unpublishedSchedule = await scheduleService.unpublishSchedule(
+      req.params.scheduleId,
+      req.user
+    );
+
+    res.status(200).json(unpublishedSchedule);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateShiftRequiredStrength(req, res, next) {
+  try {
+    const { requiredStrengthScore } = req.body || {};
+    const updatedSchedule = await scheduleService.updateShiftRequiredStrength(
+      req.params.shiftId,
+      requiredStrengthScore,
+      req.user
+    );
+
+    res.status(200).json(updatedSchedule);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateShiftRequirements(req, res, next) {
+  try {
+    const updatedSchedule = await scheduleService.updateShiftRequirements(
+      req.params.shiftId,
+      req.body || {},
+      req.user
+    );
+
+    res.status(200).json(updatedSchedule);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getSchedule,
   generateSchedule,
@@ -92,4 +134,7 @@ module.exports = {
   validateSchedule,
   clearScheduleAssignments,
   publishSchedule,
+  unpublishSchedule,
+  updateShiftRequiredStrength,
+  updateShiftRequirements,
 };

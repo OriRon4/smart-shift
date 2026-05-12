@@ -20,8 +20,77 @@
                   >
                     <header class="shift-card__header">
                       <span class="shift-card__marker"></span>
-                      <h2>{{ formatShiftType(shift) }}</h2>
+                      <div>
+                        <h2>{{ formatShiftType(shift) }}</h2>
+                        <p>Strength {{ getShiftAssignedStrength(shift) }} / {{ shift.requiredStrengthScore }}</p>
+                      </div>
+
+                      @if (canEditRequiredStrength) {
+                        <button
+                          type="button"
+                          class="shift-card__edit-action"
+                          aria-label="Edit shift requirements"
+                          (click)="openShiftRequirementEditor(shift)"
+                        >
+                          Edit
+                        </button>
+                      }
                     </header>
+
+                    @if (canEditRequiredStrength && isShiftRequirementEditorOpen(shift)) {
+                      <section class="shift-requirements-panel">
+                        <header>
+                          <strong>{{ formatShiftType(shift) }} requirements</strong>
+                          <button type="button" aria-label="Close requirements editor" (click)="closeShiftRequirementEditor()">x</button>
+                        </header>
+
+                        <div class="shift-requirements-panel__fields">
+                          <label>
+                            Waiters
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              [value]="getRequirementDraft(shift).requiredWaiters"
+                              (input)="updateRequirementDraft(shift, 'requiredWaiters', $event)"
+                            />
+                          </label>
+                          <label>
+                            Bartenders
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              [value]="getRequirementDraft(shift).requiredBartenders"
+                              (input)="updateRequirementDraft(shift, 'requiredBartenders', $event)"
+                            />
+                          </label>
+                          <label>
+                            Shift managers
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              [value]="getRequirementDraft(shift).requiredShiftLeaders"
+                              (input)="updateRequirementDraft(shift, 'requiredShiftLeaders', $event)"
+                            />
+                          </label>
+                          <label>
+                            Strength
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.5"
+                              [value]="getRequirementDraft(shift).requiredStrengthScore"
+                              (input)="updateRequirementDraft(shift, 'requiredStrengthScore', $event)"
+                            />
+                          </label>
+                        </div>
+
+                        <button type="button" (click)="saveShiftRequirements(shift)">Save requirements</button>
+                      </section>
+                    }
 
                     @for (roleGroup of shift.roleGroups; track roleGroup.jobRole) {
                       <section
@@ -50,29 +119,41 @@
 
                         <div class="worker-list">
                           @for (worker of roleGroup.assignedWorkers; track worker.employeeId) {
-                            <button
-                              class="worker-row"
-                              type="button"
-                              [disabled]="!canManage"
-                              (click)="requestReplacement(day, shift, roleGroup, worker)"
-                            >
-                              <span class="worker-row__avatar">
-                                {{ getWorkerInitials(worker) }}
-                              </span>
+                            <div>
+                              <button
+                                type="button"
+                                class="worker-row"
+                                [class.worker-row--selected]="isAssignmentSelected(shift, roleGroup, worker)"
+                                [disabled]="!canManage"
+                                (click)="selectAssignment(shift, roleGroup, worker)"
+                              >
+                                <span class="worker-row__avatar">
+                                  {{ getWorkerInitials(worker) }}
+                                </span>
 
-                              <span class="worker-row__body">
-                                <span class="worker-row__name">{{ worker.fullName }}</span>
+                                <span class="worker-row__body">
+                                  <span class="worker-row__name">{{ worker.fullName }}</span>
 
-                                @if (worker.strengthScore !== undefined) {
-                                  <span class="worker-row__metrics">
-                                    Str {{ worker.strengthScore }}
-                                    @if (worker.assignedShiftCount !== undefined && worker.requestedShiftCount !== undefined) {
-                                      - {{ worker.assignedShiftCount }}/{{ worker.requestedShiftCount }}
-                                    }
-                                  </span>
-                                }
-                              </span>
-                            </button>
+                                  @if (worker.strengthScore !== undefined) {
+                                    <span class="worker-row__metrics">
+                                      Str {{ worker.strengthScore }}
+                                      @if (worker.assignedShiftCount !== undefined && worker.requestedShiftCount !== undefined) {
+                                        - {{ worker.assignedShiftCount }}/{{ worker.requestedShiftCount }}
+                                      }
+                                    </span>
+                                  }
+                                </span>
+                              </button>
+
+                              @if (canManage && isAssignmentSelected(shift, roleGroup, worker)) {
+                                <section class="worker-action-panel">
+                                  <div>
+                                    <button type="button" (click)="requestReplacement(day, shift, roleGroup, worker)">Replace</button>
+                                    <button type="button" (click)="requestRemoval(day, shift, roleGroup, worker)">Remove</button>
+                                  </div>
+                                </section>
+                              }
+                            </div>
                           } @empty {
                             <p class="worker-list__empty">No employees assigned.</p>
                           }

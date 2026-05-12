@@ -203,6 +203,7 @@ function buildScheduleBoardResponse(
           return {
             shiftId: shift.id,
             shiftType: shift.shift_type,
+            requiredStrengthScore: roundScore(shift.required_strength_score),
             roleGroups,
           };
         });

@@ -145,6 +145,19 @@ textarea {
   padding: 14px 18px 18px;
 }
 
+.replacement-section {
+  display: grid;
+  gap: 8px;
+}
+
+.replacement-section h3 {
+  margin: 8px 0 0;
+  color: #46596d;
+  font-size: 0.74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .replacement-row {
   display: grid;
   grid-template-columns: 38px minmax(0, 1fr) auto;
@@ -276,6 +289,11 @@ textarea {
   color: #66778a;
 }
 
+.kpi-popover__hint {
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
 .employee-availability {
   display: grid;
   gap: 10px;
@@ -345,4 +363,83 @@ textarea {
 .employee-availability__empty {
   margin: 0;
   color: #66778a;
+}
+
+.schedule-board__manager-actions .schedule-board__publish-action--published {
+  border-color: #b7e1c3;
+  background: #f1fbf4;
+  color: #16603b;
+  opacity: 1;
+}
+
+.schedule-board__manager-actions .schedule-board__publish-action--published:disabled {
+  opacity: 1;
+}
+
+.shift-card__header p {
+  margin: 2px 0 0;
+  color: #66778a;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.shift-strength-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  border-bottom: 1px solid #eef2f6;
+  padding-bottom: 8px;
+}
+
+.shift-strength-editor label {
+  display: grid;
+  gap: 4px;
+  color: #66778a;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.shift-strength-editor input {
+  min-height: 30px;
+  width: 100%;
+  border: 1px solid #c7d2df;
+  border-radius: 8px;
+  padding: 0 8px;
+}
+
+.shift-strength-editor button {
+  min-height: 30px;
+  border: 1px solid #1d6f8f;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #14536a;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 0 9px;
+}
+
+.worker-row__actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.worker-row__actions button {
+  min-height: 26px;
+  border: 1px solid #c7d2df;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #34465b;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 0 8px;
+}
+
+.worker-row__actions button:last-child {
+  border-color: #d5af63;
+  color: #7a5216;
 }

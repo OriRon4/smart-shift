@@ -6,6 +6,7 @@ function mapEmployee(row) {
     fullName: row.full_name,
     jobRole: row.role,
     isActive: Boolean(row.is_active),
+    setupStatus: row.setup_status || "complete",
     professionalism: Number(row.professionalism),
     responsibility: Number(row.responsibility),
     pressureHandling: Number(row.pressure_handling),
@@ -22,6 +23,7 @@ async function getEmployees() {
         full_name,
         role,
         is_active,
+        setup_status,
         professionalism,
         responsibility,
         pressure_handling,
@@ -43,6 +45,7 @@ async function getEmployeeById(employeeId) {
         full_name,
         role,
         is_active,
+        setup_status,
         professionalism,
         responsibility,
         pressure_handling,
@@ -66,6 +69,7 @@ async function updateEmployee(employeeId, employee) {
         full_name = ?,
         role = ?,
         is_active = ?,
+        setup_status = ?,
         professionalism = ?,
         responsibility = ?,
         pressure_handling = ?,
@@ -77,6 +81,7 @@ async function updateEmployee(employeeId, employee) {
       employee.fullName,
       employee.jobRole,
       employee.isActive,
+      employee.setupStatus,
       employee.professionalism,
       employee.responsibility,
       employee.pressureHandling,
@@ -89,22 +94,8 @@ async function updateEmployee(employeeId, employee) {
   return getEmployeeById(employeeId);
 }
 
-async function deactivateEmployee(employeeId) {
-  await pool.query(
-    `
-      UPDATE employees
-      SET is_active = FALSE
-      WHERE id = ?
-    `,
-    [employeeId]
-  );
-
-  return getEmployeeById(employeeId);
-}
-
 module.exports = {
   getEmployees,
   getEmployeeById,
   updateEmployee,
-  deactivateEmployee,
 };

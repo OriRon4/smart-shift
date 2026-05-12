@@ -2,17 +2,19 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { environment } from '../../../../environments/environment';
 import {
   SaveScheduleAssignment,
   ScheduleBoardResponse,
-  ScheduleValidationResponse
+  ScheduleValidationResponse,
+  ShiftRequirementsUpdate
 } from '../models/schedule.models';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ScheduleApiService {
-  private readonly apiUrl = 'http://localhost:3000/api/schedules';
+  private readonly apiUrl = `${environment.apiBaseUrl}/schedules`;
 
   constructor(private readonly http: HttpClient) {}
 
@@ -63,6 +65,31 @@ export class ScheduleApiService {
     return this.http.post<ScheduleBoardResponse>(
       `${this.apiUrl}/${scheduleId}/publish`,
       {}
+    );
+  }
+
+  unpublishSchedule(scheduleId: number): Observable<ScheduleBoardResponse> {
+    return this.http.delete<ScheduleBoardResponse>(
+      `${this.apiUrl}/${scheduleId}/publish`
+    );
+  }
+
+  updateShiftRequiredStrength(
+    shiftId: number,
+    requiredStrengthScore: number
+  ): Observable<ScheduleBoardResponse> {
+    return this.http.patch<ScheduleBoardResponse>(
+      `${this.apiUrl}/shifts/${shiftId}/required-strength`,
+      { requiredStrengthScore }
+    );
+  }
+
+  updateShiftRequirements(
+    requirements: ShiftRequirementsUpdate
+  ): Observable<ScheduleBoardResponse> {
+    return this.http.patch<ScheduleBoardResponse>(
+      `${this.apiUrl}/shifts/${requirements.shiftId}/requirements`,
+      requirements
     );
   }
 }

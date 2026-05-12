@@ -7,7 +7,7 @@ const {
 const {
   buildScheduleBoardResponse,
 } = require("../formatters/scheduleBoardFormatter");
-const { SCHEDULE_JOB_ROLES } = require("../constants/roles");
+const { PERMISSION_ROLES, SCHEDULE_JOB_ROLES } = require("../constants/roles");
 const { createHttpError } = require("../utils/errors");
 
 function roundScore(value) {
@@ -52,6 +52,23 @@ function parseScheduleId(scheduleId) {
   return numericScheduleId;
 }
 
+function formatDateKey(value) {
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  return String(value).slice(0, 10);
+}
+
+function getSundayForDate(value) {
+  const date = new Date(`${formatDateKey(value)}T00:00:00`);
+  date.setDate(date.getDate() - date.getDay());
+  return formatDateKey(date);
+}
+
 async function resolveScheduleWeek(scheduleId, weekStartDate) {
   const numericScheduleId = parseScheduleId(scheduleId);
   const persistedSchedule = await scheduleRepository.getPersistedScheduleById(
@@ -66,7 +83,15 @@ async function resolveScheduleWeek(scheduleId, weekStartDate) {
     throw createHttpError(400, "weekStartDate does not match scheduleId");
   }
 
-  return persistedSchedule.weekStartDate;
+  return persistedSchedule;
+}
+
+function canViewUnpublishedSchedule(user) {
+  return user.permissionRole === PERMISSION_ROLES.MANAGER;
+}
+
+function canEditScheduleAssignments(user) {
+  return user.permissionRole === PERMISSION_ROLES.MANAGER;
 }
 
 async function getScheduleForWeek(weekStartDate, user) {
@@ -85,7 +110,20 @@ async function getScheduleForWeek(weekStartDate, user) {
       publishedAt: null,
       days: [],
       canEdit: false,
-      canManage: user.permissionRole === "manager",
+      canManage: user.permissionRole === PERMISSION_ROLES.MANAGER,
+    };
+  }
+
+  if (!persistedSchedule.publishedAt && !canViewUnpublishedSchedule(user)) {
+    return {
+      message: "Schedule has not been published yet.",
+      scheduleId: persistedSchedule.scheduleId,
+      weekStartDate: scheduleInputs.weekStartDate,
+      weekEndDate: scheduleInputs.weekEndDate,
+      publishedAt: null,
+      days: [],
+      canEdit: false,
+      canManage: false,
     };
   }
 
@@ -280,12 +318,17 @@ async function saveScheduleAssignments(
   assignmentsBody,
   user
 ) {
-  const resolvedWeekStartDate = await resolveScheduleWeek(
+  const persistedSchedule = await resolveScheduleWeek(
     scheduleId,
     weekStartDate
   );
+
+  if (!canEditScheduleAssignments(user)) {
+    throw createHttpError(403, "Manager permission is required");
+  }
+
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
-    resolvedWeekStartDate
+    persistedSchedule.weekStartDate
   );
   const assignments = validateAssignmentPayload(assignmentsBody);
   ensureAssignmentsMatchWeekAndRoles(scheduleInputs, assignments);
@@ -315,12 +358,12 @@ async function saveScheduleAssignments(
 }
 
 async function validateSchedule(scheduleId, weekStartDate, user) {
-  const resolvedWeekStartDate = await resolveScheduleWeek(
+  const persistedScheduleForWeek = await resolveScheduleWeek(
     scheduleId,
     weekStartDate
   );
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
-    resolvedWeekStartDate
+    persistedScheduleForWeek.weekStartDate
   );
   const persistedSchedule = await scheduleRepository.getPersistedScheduleByWeek(
     scheduleInputs.weekStartDate
@@ -407,6 +450,162 @@ async function publishSchedule(scheduleId, user) {
   };
 }
 
+async function unpublishSchedule(scheduleId, user) {
+  const numericScheduleId = parseScheduleId(scheduleId);
+  const unpublishResult = await scheduleRepository.unpublishSchedule(
+    numericScheduleId
+  );
+  const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
+    unpublishResult.weekStartDate
+  );
+  const persistedSchedule = await scheduleRepository.getPersistedScheduleById(
+    numericScheduleId
+  );
+  const algorithmResult = buildAlgorithmResultFromAssignments(
+    scheduleInputs,
+    persistedSchedule.assignments
+  );
+
+  return {
+    message: "Schedule unpublished successfully",
+    ...buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
+      scheduleId: unpublishResult.scheduleId,
+      publishedAt: null,
+      permissionRole: user.permissionRole,
+    }),
+    unpublishResult,
+  };
+}
+
+async function updateShiftRequiredStrength(shiftId, requiredStrengthScore, user) {
+  const numericShiftId = Number(shiftId);
+  const numericStrength = Number(requiredStrengthScore);
+
+  if (!Number.isInteger(numericShiftId) || numericShiftId <= 0) {
+    throw createHttpError(400, "shiftId must be a positive integer");
+  }
+
+  if (!Number.isFinite(numericStrength) || numericStrength < 0) {
+    throw createHttpError(400, "requiredStrengthScore must be a non-negative number");
+  }
+
+  const updatedShift = await scheduleRepository.updateShiftRequiredStrength(
+    numericShiftId,
+    numericStrength
+  );
+
+  if (!updatedShift) {
+    throw createHttpError(404, "Shift not found");
+  }
+
+  const weekStartDate = getSundayForDate(updatedShift.shift_date);
+  const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
+    weekStartDate
+  );
+  const persistedSchedule = await scheduleRepository.getPersistedScheduleByWeek(
+    weekStartDate
+  );
+
+  if (!persistedSchedule) {
+    return {
+      message: "Shift required strength updated successfully",
+      shiftId: numericShiftId,
+      requiredStrengthScore: numericStrength,
+    };
+  }
+
+  const algorithmResult = buildAlgorithmResultFromAssignments(
+    scheduleInputs,
+    persistedSchedule.assignments
+  );
+
+  return {
+    message: "Shift required strength updated successfully",
+    ...buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
+      scheduleId: persistedSchedule.scheduleId,
+      publishedAt: persistedSchedule.publishedAt,
+      permissionRole: user.permissionRole,
+    }),
+  };
+}
+
+function readIntegerRequirement(value, fieldName, min) {
+  const numberValue = Number(value);
+
+  if (!Number.isInteger(numberValue) || numberValue < min) {
+    throw createHttpError(400, `${fieldName} must be an integer greater than or equal to ${min}`);
+  }
+
+  return numberValue;
+}
+
+function normalizeShiftRequirements(body) {
+  const requiredStrengthScore = Number(body.requiredStrengthScore);
+
+  if (
+    !Number.isFinite(requiredStrengthScore) ||
+    requiredStrengthScore < 0 ||
+    requiredStrengthScore > 100
+  ) {
+    throw createHttpError(400, "requiredStrengthScore must be between 0 and 100");
+  }
+
+  return {
+    requiredWaiters: readIntegerRequirement(body.requiredWaiters, "requiredWaiters", 1),
+    requiredBartenders: readIntegerRequirement(body.requiredBartenders, "requiredBartenders", 0),
+    requiredShiftLeaders: readIntegerRequirement(body.requiredShiftLeaders, "requiredShiftLeaders", 0),
+    requiredStrengthScore,
+  };
+}
+
+async function updateShiftRequirements(shiftId, body, user) {
+  const numericShiftId = Number(shiftId);
+
+  if (!Number.isInteger(numericShiftId) || numericShiftId <= 0) {
+    throw createHttpError(400, "shiftId must be a positive integer");
+  }
+
+  const requirements = normalizeShiftRequirements(body);
+  const updatedShift = await scheduleRepository.updateShiftRequirements(
+    numericShiftId,
+    requirements
+  );
+
+  if (!updatedShift) {
+    throw createHttpError(404, "Shift not found");
+  }
+
+  const weekStartDate = getSundayForDate(updatedShift.shift_date);
+  const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
+    weekStartDate
+  );
+  const persistedSchedule = await scheduleRepository.getPersistedScheduleByWeek(
+    weekStartDate
+  );
+
+  if (!persistedSchedule) {
+    return {
+      message: "Shift requirements updated successfully",
+      shiftId: numericShiftId,
+      requirements,
+    };
+  }
+
+  const algorithmResult = buildAlgorithmResultFromAssignments(
+    scheduleInputs,
+    persistedSchedule.assignments
+  );
+
+  return {
+    message: "Shift requirements updated successfully",
+    ...buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
+      scheduleId: persistedSchedule.scheduleId,
+      publishedAt: persistedSchedule.publishedAt,
+      permissionRole: user.permissionRole,
+    }),
+  };
+}
+
 module.exports = {
   getScheduleForWeek,
   generateScheduleForWeek,
@@ -414,5 +613,8 @@ module.exports = {
   validateSchedule,
   clearScheduleAssignments,
   publishSchedule,
+  unpublishSchedule,
+  updateShiftRequiredStrength,
+  updateShiftRequirements,
   buildPersistedAssignments,
 };

@@ -34,6 +34,12 @@ async function replaceAvailabilityForEmployee(employeeId, weekStartDate, shiftId
   const selectedShiftIds = [...new Set(shiftIds.map(Number))];
 
   for (const shiftId of selectedShiftIds) {
+    if (!Number.isInteger(shiftId) || shiftId <= 0) {
+      const error = new Error("shiftIds must contain positive integers");
+      error.statusCode = 400;
+      throw error;
+    }
+
     if (!validShiftIds.has(shiftId)) {
       const error = new Error("All shiftIds must belong to the selected week");
       error.statusCode = 400;

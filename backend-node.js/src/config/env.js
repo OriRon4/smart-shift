@@ -3,6 +3,11 @@ const dotenv = require("dotenv");
 dotenv.config();
 
 const port = Number(process.env.PORT || 3000);
+const jwtSecret = process.env.JWT_SECRET;
+
+if (!jwtSecret) {
+  throw new Error("JWT_SECRET environment variable is required");
+}
 
 const db = {
   host: process.env.DB_HOST || "localhost",
@@ -15,4 +20,5 @@ const db = {
 module.exports = {
   port,
   db,
+  jwtSecret,
 };

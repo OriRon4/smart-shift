@@ -1,6 +1,6 @@
 const availabilityRepository = require("../repositories/availabilityRepository");
 const employeeRepository = require("../repositories/employeeRepository");
-const { SCHEDULE_JOB_ROLES } = require("../constants/roles");
+const { PERMISSION_ROLES, SCHEDULE_JOB_ROLES } = require("../constants/roles");
 const { createHttpError } = require("../utils/errors");
 
 function formatDateKey(value) {
@@ -91,18 +91,41 @@ async function submitMyAvailability(user, weekStartDate, shiftIds) {
   };
 }
 
-async function getEmployeeAvailability(employeeId, weekStartDate) {
+function canManageEmployeeAvailability(user, employeeId) {
+  return (
+    user.permissionRole === PERMISSION_ROLES.MANAGER ||
+    Number(user.employeeId) === Number(employeeId)
+  );
+}
+
+function parseEmployeeId(employeeId) {
   const numericEmployeeId = Number(employeeId);
 
   if (!Number.isInteger(numericEmployeeId) || numericEmployeeId <= 0) {
     throw createHttpError(400, "employeeId must be a positive integer");
   }
 
-  const employee = await employeeRepository.getEmployeeById(numericEmployeeId);
+  return numericEmployeeId;
+}
+
+async function ensureEmployeeExists(employeeId) {
+  const employee = await employeeRepository.getEmployeeById(employeeId);
 
   if (!employee) {
     throw createHttpError(404, "Employee not found");
   }
+
+  return employee;
+}
+
+async function getEmployeeAvailability(employeeId, weekStartDate, user) {
+  const numericEmployeeId = parseEmployeeId(employeeId);
+
+  if (!canManageEmployeeAvailability(user, numericEmployeeId)) {
+    throw createHttpError(403, "Cannot access availability for another employee");
+  }
+
+  await ensureEmployeeExists(numericEmployeeId);
 
   const shifts = await availabilityRepository.getShiftsForAvailability(weekStartDate);
   const selectedShiftIds =
@@ -119,22 +142,18 @@ async function getEmployeeAvailability(employeeId, weekStartDate) {
   };
 }
 
-async function updateEmployeeAvailability(employeeId, weekStartDate, shiftIds) {
-  const numericEmployeeId = Number(employeeId);
+async function updateEmployeeAvailability(employeeId, weekStartDate, shiftIds, user) {
+  const numericEmployeeId = parseEmployeeId(employeeId);
 
-  if (!Number.isInteger(numericEmployeeId) || numericEmployeeId <= 0) {
-    throw createHttpError(400, "employeeId must be a positive integer");
+  if (!canManageEmployeeAvailability(user, numericEmployeeId)) {
+    throw createHttpError(403, "Cannot update availability for another employee");
   }
 
   if (!Array.isArray(shiftIds)) {
     throw createHttpError(400, "shiftIds must be an array");
   }
 
-  const employee = await employeeRepository.getEmployeeById(numericEmployeeId);
-
-  if (!employee) {
-    throw createHttpError(404, "Employee not found");
-  }
+  await ensureEmployeeExists(numericEmployeeId);
 
   const selectedShiftIds =
     await availabilityRepository.replaceAvailabilityForEmployee(

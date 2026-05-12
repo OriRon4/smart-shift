@@ -18,18 +18,27 @@ function canViewDetails(user) {
   );
 }
 
+function canViewEmployeeById(user, employeeId) {
+  return canViewDetails(user) || Number(user.employeeId) === Number(employeeId);
+}
+
 async function getEmployeesForUser(user) {
   const employees = await employeeRepository.getEmployees();
 
   if (!canViewDetails(user)) {
-    return employees.filter((employee) => employee.isActive).map(toNamesOnly);
+    return employees
+      .filter(
+        (employee) =>
+          employee.isActive || employee.id === Number(user.employeeId)
+      )
+      .map(toNamesOnly);
   }
 
   return employees;
 }
 
 async function getEmployeeByIdForUser(employeeId, user) {
-  if (!canViewDetails(user)) {
+  if (!canViewEmployeeById(user, employeeId)) {
     throw createHttpError(403, "Employee details are not available for this role");
   }
 
@@ -63,10 +72,17 @@ function normalizeEmployeeUpdate(body) {
     throw createHttpError(400, "jobRole is invalid");
   }
 
+  const hasManagerSetup =
+    readNumber(body.professionalism, "professionalism", 0, 10) > 0 &&
+    readNumber(body.responsibility, "responsibility", 0, 10) > 0 &&
+    readNumber(body.pressureHandling, "pressureHandling", 0, 10) > 0 &&
+    readNumber(body.potential, "potential", 0, 10) > 0;
+
   return {
     fullName,
     jobRole: body.jobRole,
     isActive: Boolean(body.isActive),
+    setupStatus: hasManagerSetup ? "complete" : "pending",
     professionalism: readNumber(body.professionalism, "professionalism", 0, 10),
     responsibility: readNumber(body.responsibility, "responsibility", 0, 10),
     pressureHandling: readNumber(body.pressureHandling, "pressureHandling", 0, 10),
@@ -86,19 +102,8 @@ async function updateEmployee(employeeId, body) {
   return employeeRepository.updateEmployee(employeeId, employeeUpdate);
 }
 
-async function deactivateEmployee(employeeId) {
-  const existingEmployee = await employeeRepository.getEmployeeById(employeeId);
-
-  if (!existingEmployee) {
-    throw createHttpError(404, "Employee not found");
-  }
-
-  return employeeRepository.deactivateEmployee(employeeId);
-}
-
 module.exports = {
   getEmployeesForUser,
   getEmployeeByIdForUser,
   updateEmployee,
-  deactivateEmployee,
 };

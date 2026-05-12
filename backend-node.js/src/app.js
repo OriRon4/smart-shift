@@ -34,11 +34,23 @@ app.use((req, res) => {
 
 app.use((error, req, res, next) => {
   const statusCode = error.statusCode || 500;
+  const isServerError = statusCode >= 500;
 
-  res.status(statusCode).json({
-    message: error.message || "Internal server error",
-    details: error.details,
-  });
+  if (isServerError) {
+    console.error(error);
+  }
+
+  const responseBody = {
+    message: isServerError
+      ? "Internal server error"
+      : error.message || "Request failed",
+  };
+
+  if (!isServerError && error.details) {
+    responseBody.details = error.details;
+  }
+
+  res.status(statusCode).json(responseBody);
 });
 
 module.exports = app;

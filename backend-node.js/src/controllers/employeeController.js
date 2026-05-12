@@ -33,23 +33,8 @@ async function updateEmployee(req, res, next) {
   }
 }
 
-async function deactivateEmployee(req, res, next) {
-  try {
-    const employee = await employeeService.deactivateEmployee(
-      Number(req.params.id)
-    );
-    res.status(200).json({
-      message: "Employee deactivated successfully",
-      employee,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
 module.exports = {
   getEmployees,
   getEmployeeById,
   updateEmployee,
-  deactivateEmployee,
 };

@@ -1,13 +1,24 @@
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 const authRepository = require("../repositories/authRepository");
+const env = require("../config/env");
 const { createHttpError } = require("../utils/errors");
 
-function buildMockToken(userId) {
-  return `mock-token-${userId}`;
-}
+const BCRYPT_ROUNDS = 12;
+const JWT_EXPIRES_IN = "8h";
 
-function parseMockToken(token) {
-  const match = /^mock-token-(\d+)$/.exec(token || "");
-  return match ? Number(match[1]) : null;
+function buildToken(user) {
+  return jwt.sign(
+    {
+      userId: user.id,
+      employeeId: user.employeeId,
+      role: user.permissionRole,
+    },
+    env.jwtSecret,
+    {
+      expiresIn: JWT_EXPIRES_IN,
+    }
+  );
 }
 
 function sanitizeUser(user) {
@@ -29,14 +40,39 @@ async function login(loginValue, password) {
 
   const user = await authRepository.findUserByLogin(loginValue);
 
-  if (!user || !user.isActive || user.passwordHash !== password) {
+  if (!user || !user.isActive) {
+    throw createHttpError(401, "Invalid login credentials");
+  }
+
+  const passwordMatches = await verifyPassword(user, password);
+
+  if (!passwordMatches) {
     throw createHttpError(401, "Invalid login credentials");
   }
 
   return {
-    token: buildMockToken(user.id),
+    token: buildToken(user),
     user: sanitizeUser(user),
   };
+}
+
+function isBcryptHash(value) {
+  return /^\$2[aby]\$\d{2}\$/.test(value || "");
+}
+
+async function verifyPassword(user, password) {
+  if (isBcryptHash(user.passwordHash)) {
+    return bcrypt.compare(password, user.passwordHash);
+  }
+
+  // Backward-compatible migration path for existing local demo databases.
+  if (user.passwordHash === password) {
+    const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+    await authRepository.updateUserPasswordHash(user.id, passwordHash);
+    return true;
+  }
+
+  return false;
 }
 
 function normalizeWorkerRegistration(body) {
@@ -83,18 +119,30 @@ async function registerWorker(body) {
     throw createHttpError(409, "A user with this username already exists");
   }
 
-  const user = await authRepository.createWorkerUser(worker);
+  const passwordHash = await bcrypt.hash(worker.password, BCRYPT_ROUNDS);
+  const user = await authRepository.createWorkerUser({
+    ...worker,
+    passwordHash,
+  });
 
   return {
-    token: buildMockToken(user.id),
+    token: buildToken(user),
     user: sanitizeUser(user),
   };
 }
 
 async function getUserByToken(token) {
-  const userId = parseMockToken(token);
+  let payload;
 
-  if (!userId) {
+  try {
+    payload = jwt.verify(token, env.jwtSecret);
+  } catch {
+    throw createHttpError(401, "Invalid authentication token");
+  }
+
+  const userId = Number(payload.userId);
+
+  if (!Number.isInteger(userId) || userId <= 0) {
     throw createHttpError(401, "Invalid authentication token");
   }
 

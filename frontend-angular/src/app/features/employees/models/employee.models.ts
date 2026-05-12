@@ -5,6 +5,7 @@ export interface Employee {
   fullName: string;
   jobRole?: JobRole;
   isActive?: boolean;
+  setupStatus?: 'pending' | 'complete';
   professionalism?: number;
   responsibility?: number;
   pressureHandling?: number;

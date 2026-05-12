@@ -2,13 +2,14 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { environment } from '../../../../environments/environment';
 import { Employee, EmployeeResponse, EmployeesResponse } from '../models/employee.models';
 
 @Injectable({
   providedIn: 'root'
 })
 export class EmployeesApiService {
-  private readonly apiUrl = 'http://localhost:3000/api/employees';
+  private readonly apiUrl = `${environment.apiBaseUrl}/employees`;
 
   constructor(private readonly http: HttpClient) {}
 
@@ -24,10 +25,4 @@ export class EmployeesApiService {
     return this.http.patch<EmployeeResponse>(`${this.apiUrl}/${employee.id}`, employee);
   }
 
-  deactivateEmployee(employeeId: number): Observable<EmployeeResponse> {
-    return this.http.patch<EmployeeResponse>(
-      `${this.apiUrl}/${employeeId}/deactivate`,
-      {}
-    );
-  }
 }

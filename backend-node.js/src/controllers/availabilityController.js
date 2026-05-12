@@ -44,7 +44,8 @@ async function getEmployeeAvailability(req, res, next) {
     const { weekStartDate } = req.query || {};
     const availability = await availabilityService.getEmployeeAvailability(
       req.params.employeeId,
-      weekStartDate
+      weekStartDate,
+      req.user
     );
 
     res.status(200).json(availability);
@@ -59,7 +60,8 @@ async function updateEmployeeAvailability(req, res, next) {
     const availability = await availabilityService.updateEmployeeAvailability(
       req.params.employeeId,
       weekStartDate,
-      shiftIds
+      shiftIds,
+      req.user
     );
 
     res.status(200).json(availability);

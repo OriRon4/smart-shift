@@ -2,6 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
+import { environment } from '../../../../environments/environment';
 import {
   AllAvailabilityResponse,
   AvailabilityResponse
@@ -11,7 +12,7 @@ import {
   providedIn: 'root'
 })
 export class AvailabilityApiService {
-  private readonly apiUrl = 'http://localhost:3000/api/availability';
+  private readonly apiUrl = `${environment.apiBaseUrl}/availability`;
 
   constructor(private readonly http: HttpClient) {}
 

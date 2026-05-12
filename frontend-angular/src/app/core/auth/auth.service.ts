@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 
+import { environment } from '../../../environments/environment';
 import { AuthUser, LoginResponse } from './auth.models';
 
 const TOKEN_STORAGE_KEY = 'smartShiftToken';
@@ -11,7 +12,7 @@ const USER_STORAGE_KEY = 'smartShiftUser';
   providedIn: 'root'
 })
 export class AuthService {
-  private readonly apiUrl = 'http://localhost:3000/api/auth';
+  private readonly apiUrl = `${environment.apiBaseUrl}/auth`;
   readonly currentUser = signal<AuthUser | null>(this.readStoredUser());
 
   constructor(private readonly http: HttpClient) {}
