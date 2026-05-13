@@ -25,6 +25,65 @@ In a real deployment, managers would record actual shift performance after each
 shift. Those logs would gradually replace or improve the demo data used for
 training.
 
+## Setup
+
+Create a Python virtual environment if desired, then install the minimal ML
+dependencies:
+
+```bash
+python -m pip install -r ml/requirements.txt
+```
+
+The scripts read database settings from environment variables. For local
+development they also load `backend-node.js/.env`, so the same MySQL settings
+used by the backend can be reused.
+
+## Training
+
+Train the two regression models from `shift_performance_logs`:
+
+```bash
+python ml/train_shift_requirements_model.py
+```
+
+The training script uses these features:
+
+- `day_of_week`
+- `shift_type`
+- `is_weekend`
+- `expected_customer_load`
+- `manager_rating`
+
+It creates:
+
+- `ml/models/waiter_demand_model.joblib`
+- `ml/models/strength_demand_model.joblib`
+- `ml/models/model_metadata.json`
+
+The metadata file contains model version, training time, row count, feature
+names, target names, and test metrics.
+
+## Prediction
+
+Predict one shift directly from CLI arguments:
+
+```bash
+python ml/predict_shift_requirements.py --shift-id 1 --day-of-week 5 --shift-type evening --is-weekend --expected-customer-load 230 --manager-rating 8.4
+```
+
+Or pass a JSON file:
+
+```bash
+python ml/predict_shift_requirements.py --input-file ml/data/example_shift.json
+```
+
+The prediction output includes:
+
+- `shift_id`
+- `recommended_waiters`
+- `recommended_strength_score`
+- `model_version`
+
 ## Planned Workflow
 
 1. Read historical shift performance data.
