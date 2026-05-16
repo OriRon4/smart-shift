@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 
 import {
@@ -8,6 +8,7 @@ import {
 import { WeekSelectorComponent } from '../../components/week-selector/week-selector.component';
 import {
   JobRole,
+  ShiftMlPrediction,
   SaveScheduleAssignment,
   ScheduleBoardResponse,
   ScheduleRoleGroup,
@@ -16,6 +17,7 @@ import {
   ShiftRequirementsUpdate
 } from '../../models/schedule.models';
 import { ScheduleApiService } from '../../services/schedule-api.service';
+import { MlRecommendationsApiService } from '../../services/ml-recommendations-api.service';
 import { AuthService } from '../../../../core/auth/auth.service';
 import { PermissionService } from '../../../../core/permissions/permission.service';
 import { Employee } from '../../../employees/models/employee.models';
@@ -36,7 +38,7 @@ import {
   templateUrl: './schedule-board.component.html',
   styleUrl: './schedule-board.component.css'
 })
-export class ScheduleBoardComponent implements OnInit {
+export class ScheduleBoardComponent implements OnDestroy, OnInit {
   protected selectedWeekStartDate = getCurrentWeekStartDate();
   protected board: ScheduleBoardResponse | null = null;
   protected employees: Employee[] = [];
@@ -52,11 +54,13 @@ export class ScheduleBoardComponent implements OnInit {
   protected focusedShiftId: number | null = null;
   protected hasUnsavedChanges = false;
   protected showEmployeesUnderTarget = false;
+  protected mlPredictionsByShiftId = new Map<number, ShiftMlPrediction>();
 
   protected readonly currentUser = this.authService.currentUser;
 
   constructor(
     private readonly scheduleApiService: ScheduleApiService,
+    private readonly mlRecommendationsApiService: MlRecommendationsApiService,
     private readonly authService: AuthService,
     private readonly permissionService: PermissionService,
     private readonly employeesApiService: EmployeesApiService,
@@ -74,6 +78,14 @@ export class ScheduleBoardComponent implements OnInit {
       });
       this.loadReplacementAvailability();
     }
+
+    if (this.canManageSchedule()) {
+      this.loadMlPredictions();
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.closeReplacementDrawer();
   }
 
   protected get weekRangeLabel(): string {
@@ -658,6 +670,31 @@ export class ScheduleBoardComponent implements OnInit {
     this.replacementSearch = '';
   }
 
+  protected generateMlRecommendations(): void {
+    if (!this.canManageSchedule()) {
+      return;
+    }
+
+    this.isLoading = true;
+    this.errorMessage = '';
+    this.actionErrorMessage = '';
+    this.successMessage = '';
+
+    this.mlRecommendationsApiService
+      .generateWeekPredictions(this.selectedWeekStartDate)
+      .subscribe({
+        next: (response) => {
+          this.setMlPredictions(response.predictions);
+          this.successMessage = 'ML recommendations generated.';
+          this.isLoading = false;
+        },
+        error: (error: unknown) => {
+          this.errorMessage = this.resolveErrorMessage(error);
+          this.isLoading = false;
+        }
+      });
+  }
+
   protected closeReplacementDrawer(): void {
     this.pendingReplacement = null;
     this.replacementSearch = '';
@@ -865,6 +902,10 @@ export class ScheduleBoardComponent implements OnInit {
     return `${assigned}/${target}`;
   }
 
+  protected getEmployeeStrengthLabel(employee: Employee): string {
+    return this.calculateEmployeeStrength(employee).toFixed(1);
+  }
+
   private getReplacementSortRank(employee: Employee): number {
     if (employee.isActive === false) {
       return 4;
@@ -994,6 +1035,27 @@ export class ScheduleBoardComponent implements OnInit {
       });
   }
 
+  protected applyMlPrediction(shiftId: number): void {
+    if (!this.canManageSchedule()) {
+      return;
+    }
+
+    this.actionErrorMessage = '';
+    this.successMessage = '';
+    this.validationResult = null;
+
+    this.mlRecommendationsApiService.applyPrediction(shiftId).subscribe({
+      next: (board) => {
+        this.board = board;
+        this.successMessage = 'ML recommendation applied.';
+        this.loadMlPredictions();
+      },
+      error: (error: unknown) => {
+        this.actionErrorMessage = this.resolveErrorMessage(error);
+      }
+    });
+  }
+
   private isUsableScheduleBoard(
     board: ScheduleBoardResponse | null | undefined
   ): board is ScheduleBoardResponse {
@@ -1017,6 +1079,31 @@ export class ScheduleBoardComponent implements OnInit {
         this.actionErrorMessage = this.resolveErrorMessage(error);
       }
     });
+  }
+
+  private loadMlPredictions(): void {
+    this.mlRecommendationsApiService
+      .getPredictions(this.selectedWeekStartDate)
+      .subscribe({
+        next: (response) => {
+          this.setMlPredictions(response.predictions);
+        },
+        error: () => {
+          this.mlPredictionsByShiftId = new Map();
+        }
+      });
+  }
+
+  private setMlPredictions(predictions: ShiftMlPrediction[]): void {
+    this.mlPredictionsByShiftId = new Map(
+      predictions
+        .filter(
+          (prediction) =>
+            prediction.recommendedWaiters !== null &&
+            prediction.recommendedStrengthScore !== null
+        )
+        .map((prediction) => [prediction.shiftId, prediction])
+    );
   }
 
   private flattenAssignments(board: ScheduleBoardResponse): SaveScheduleAssignment[] {
@@ -1153,6 +1240,10 @@ export class ScheduleBoardComponent implements OnInit {
 
     if (this.canReplaceScheduleWorkers()) {
       this.loadReplacementAvailability();
+    }
+
+    if (this.canManageSchedule()) {
+      this.loadMlPredictions();
     }
   }
 

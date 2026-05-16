@@ -2,6 +2,7 @@ const express = require("express");
 const authRoutes = require("./routes/authRoutes");
 const availabilityRoutes = require("./routes/availabilityRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
+const mlRoutes = require("./routes/mlRoutes");
 const scheduleRoutes = require("./routes/scheduleRoutes");
 
 const app = express();
@@ -24,6 +25,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/availability", availabilityRoutes);
 app.use("/api/employees", employeeRoutes);
+app.use("/api/ml", mlRoutes);
 app.use("/api/schedules", scheduleRoutes);
 
 app.use((req, res) => {

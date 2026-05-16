@@ -6,6 +6,7 @@ const { createHttpError } = require("../utils/errors");
 
 const BCRYPT_ROUNDS = 12;
 const JWT_EXPIRES_IN = "8h";
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function buildToken(user) {
   return jwt.sign(
@@ -85,7 +86,7 @@ function normalizeWorkerRegistration(body) {
     throw createHttpError(400, "fullName is required");
   }
 
-  if (!email || !email.includes("@")) {
+  if (!EMAIL_PATTERN.test(email)) {
     throw createHttpError(400, "A valid email is required");
   }
 
@@ -110,20 +111,30 @@ async function registerWorker(body) {
   const existingUser = await authRepository.findUserByLogin(worker.email);
 
   if (existingUser) {
-    throw createHttpError(409, "A user with this email already exists");
+    throw createHttpError(409, "Username or email already exists");
   }
 
   const existingUsername = await authRepository.findUserByLogin(worker.username);
 
   if (existingUsername) {
-    throw createHttpError(409, "A user with this username already exists");
+    throw createHttpError(409, "Username or email already exists");
   }
 
   const passwordHash = await bcrypt.hash(worker.password, BCRYPT_ROUNDS);
-  const user = await authRepository.createWorkerUser({
-    ...worker,
-    passwordHash,
-  });
+  let user;
+
+  try {
+    user = await authRepository.createWorkerUser({
+      ...worker,
+      passwordHash,
+    });
+  } catch (error) {
+    if (error && error.code === "ER_DUP_ENTRY") {
+      throw createHttpError(409, "Username or email already exists");
+    }
+
+    throw error;
+  }
 
   return {
     token: buildToken(user),

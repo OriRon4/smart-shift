@@ -69,6 +69,25 @@ export interface ShiftRequirementsUpdate {
   requiredStrengthScore: number;
 }
 
+export interface ShiftMlPrediction {
+  shiftId: number;
+  shiftDate: string;
+  shiftType: ScheduleShiftType;
+  currentWaiters: number;
+  currentStrengthScore: number;
+  recommendedWaiters: number | null;
+  recommendedStrengthScore: number | null;
+  modelVersion: string | null;
+  createdAt: string | null;
+}
+
+export interface MlPredictionsResponse {
+  message?: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  predictions: ShiftMlPrediction[];
+}
+
 export interface ScheduleValidationResponse {
   message: string;
   warnings: ScheduleWarning[];

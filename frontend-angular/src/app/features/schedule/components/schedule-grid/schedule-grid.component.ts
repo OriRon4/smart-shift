@@ -6,6 +6,7 @@ import {
   ScheduleBoardResponse,
   ScheduleRoleGroup,
   ScheduleShift,
+  ShiftMlPrediction,
   ScheduleWorker,
   ShiftRequirementsUpdate
 } from '../../models/schedule.models';
@@ -36,6 +37,7 @@ export class ScheduleGridComponent {
   @Input() activeRoleGroupKeys = new Set<string>();
   @Input() onlyShowActive = false;
   @Input() canEditRequiredStrength = false;
+  @Input() mlPredictionsByShiftId = new Map<number, ShiftMlPrediction>();
 
   @Output() replaceAssignment = new EventEmitter<ReplaceAssignmentRequest>();
   @Output() removeAssignment = new EventEmitter<ReplaceAssignmentRequest>();
@@ -46,6 +48,7 @@ export class ScheduleGridComponent {
     requiredShiftLeaders: number;
     requiredStrengthScore: number;
   }>();
+  @Output() applyMlPrediction = new EventEmitter<number>();
 
   protected selectedAssignmentKey: string | null = null;
   protected editingShiftId: number | null = null;
@@ -131,6 +134,29 @@ export class ScheduleGridComponent {
 
   getRequiredStrengthDraft(shift: ScheduleShift): number {
     return this.getRequirementDraft(shift).requiredStrengthScore;
+  }
+
+  getMlPrediction(shift: ScheduleShift): ShiftMlPrediction | null {
+    const prediction = this.mlPredictionsByShiftId.get(shift.shiftId);
+
+    if (
+      !prediction ||
+      prediction.recommendedWaiters === null ||
+      prediction.recommendedStrengthScore === null
+    ) {
+      return null;
+    }
+
+    return prediction;
+  }
+
+  requestApplyMlPrediction(shift: ScheduleShift): void {
+    if (!this.canEditRequiredStrength || !this.getMlPrediction(shift)) {
+      return;
+    }
+
+    this.applyMlPrediction.emit(shift.shiftId);
+    this.editingShiftId = null;
   }
 
   getRequirementDraft(shift: ScheduleShift): ShiftRequirementsUpdate {

@@ -4,6 +4,8 @@ import { Router } from '@angular/router';
 
 import { AuthService } from '../../../../core/auth/auth.service';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -32,6 +34,13 @@ export class LoginComponent {
   }
 
   submit(): void {
+    const login = this.loginValue.trim();
+
+    if (login.includes('@') && !EMAIL_PATTERN.test(login)) {
+      this.errorMessage = 'Enter a valid email address, or use a username.';
+      return;
+    }
+
     this.isLoading = true;
     this.errorMessage = '';
 
@@ -48,6 +57,11 @@ export class LoginComponent {
   }
 
   registerWorker(): void {
+    if (!EMAIL_PATTERN.test(this.registerEmail.trim())) {
+      this.errorMessage = 'Enter a valid email address.';
+      return;
+    }
+
     this.isLoading = true;
     this.errorMessage = '';
 
@@ -96,6 +110,10 @@ export class LoginComponent {
   }
 
   private resolveErrorMessage(error: unknown): string {
+    if (error instanceof HttpErrorResponse && error.status === 409) {
+      return 'Username or email already exists';
+    }
+
     if (error instanceof HttpErrorResponse && error.error?.message) {
       return error.error.message;
     }

@@ -88,6 +88,17 @@
                           </label>
                         </div>
 
+                        @if (getMlPrediction(shift); as prediction) {
+                          <section class="shift-ml-recommendation">
+                            <span>ML recommendation</span>
+                            <strong>
+                              {{ prediction.recommendedWaiters }} waiters · Strength {{ prediction.recommendedStrengthScore }}
+                            </strong>
+                            <small>Manager approval required before applying.</small>
+                            <button type="button" (click)="requestApplyMlPrediction(shift)">Apply ML Recommendation</button>
+                          </section>
+                        }
+
                         <button type="button" (click)="saveShiftRequirements(shift)">Save requirements</button>
                       </section>
                     }

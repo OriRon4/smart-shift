@@ -1,11 +1,14 @@
 # Smart-Shift Database
 
-This folder is now a database skeleton only for the V1 rebuild.
+This folder contains the MySQL schema, migrations, and demo seed data for the
+Smart-Shift final project.
 
-There is intentionally no SQL implementation yet.
+## Contents
 
-## Planned Contents
+- `schema/schema.sql` - full database schema for a clean setup.
+- `migrations/` - incremental database changes.
+- `seed/seed.sql` - core demo users, employees, shifts, and availability.
+- `seed/ml_shift_performance_seed.sql` - synthetic historical data for ML
+  training demonstrations.
 
-- schema design for the exact V1 flow
-- seed data for one full demo week
-- short documentation for setup and assumptions
+The ML seed data is synthetic demo data, not production restaurant data.

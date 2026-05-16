@@ -210,6 +210,42 @@
   font-weight: 900;
 }
 
+.shift-ml-recommendation {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #bfd7e2;
+  border-radius: 9px;
+  background: #eef7fa;
+  padding: 8px;
+}
+
+.shift-ml-recommendation span {
+  color: #476276;
+  font-size: 0.62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.shift-ml-recommendation strong {
+  color: #143c52;
+  font-size: 0.82rem;
+}
+
+.shift-ml-recommendation small {
+  color: #66778a;
+  font-size: 0.68rem;
+}
+
+.shift-ml-recommendation button {
+  min-height: 30px;
+  border: 1px solid #1d6f8f;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1d6f8f;
+  cursor: pointer;
+  font-weight: 900;
+}
+
 .role-group {
   display: grid;
   gap: 8px;

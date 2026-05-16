@@ -1,11 +1,13 @@
 # Seed Folder
 
-This folder is reserved for the V1 seed data once we write it together.
+This folder contains demo data used for development, testing, and the final
+project demonstration.
 
-The first seed pass should support:
+Seed files:
 
-- one full selected week
-- 7 days
-- 2 shifts per day
-- enough waiters
-- meaningful request patterns for demoing fairness and uncovered slots when needed
+- `seed.sql` - core restaurant demo data.
+- `ml_shift_performance_seed.sql` - synthetic historical shift performance
+  rows used to train the ML requirement prediction models.
+
+The ML seed data is intentionally synthetic because the project does not yet
+have real restaurant production history.

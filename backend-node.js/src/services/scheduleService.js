@@ -91,7 +91,10 @@ function canViewUnpublishedSchedule(user) {
 }
 
 function canEditScheduleAssignments(user) {
-  return user.permissionRole === PERMISSION_ROLES.MANAGER;
+  return (
+    user.permissionRole === PERMISSION_ROLES.MANAGER ||
+    user.permissionRole === PERMISSION_ROLES.SHIFT_LEADER
+  );
 }
 
 async function getScheduleForWeek(weekStartDate, user) {
@@ -327,6 +330,16 @@ async function saveScheduleAssignments(
     throw createHttpError(403, "Manager permission is required");
   }
 
+  if (
+    user.permissionRole === PERMISSION_ROLES.SHIFT_LEADER &&
+    !persistedSchedule.publishedAt
+  ) {
+    throw createHttpError(
+      403,
+      "Schedule must be published before shift leaders can edit assignments"
+    );
+  }
+
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
     persistedSchedule.weekStartDate
   );
@@ -339,7 +352,10 @@ async function saveScheduleAssignments(
   );
   const persistenceResult = await scheduleRepository.saveScheduleAssignments(
     scheduleInputs.weekStartDate,
-    persistedAssignments
+    persistedAssignments,
+    {
+      preservePublished: user.permissionRole === PERMISSION_ROLES.SHIFT_LEADER,
+    }
   );
   const algorithmResult = buildAlgorithmResultFromAssignments(
     scheduleInputs,

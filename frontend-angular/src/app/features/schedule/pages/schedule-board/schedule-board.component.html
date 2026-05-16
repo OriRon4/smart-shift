@@ -32,6 +32,9 @@
       @if ((canManageSchedule() || canSaveScheduleAssignments()) && canUseScheduleActions) {
         <div class="schedule-board__manager-actions">
           @if (canManageSchedule()) {
+            <button type="button" [disabled]="isLoading" (click)="generateMlRecommendations()">
+              Generate ML Recommendations
+            </button>
             <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="validateSchedule()">
               Validate schedule
             </button>
@@ -174,6 +177,7 @@
                   <div class="replacement-row__main">
                     <strong>{{ employee.fullName }}</strong>
                     <span>{{ formatEmployeeRole(employee) }} - {{ getEmployeeTargetRatio(employee) }}</span>
+                    <small>{{ getEmployeeStrengthLabel(employee) }} strength</small>
                     <div class="replacement-row__badges">
                       @if (isEmployeeAvailableForPendingShift(employee)) {
                         <span class="replacement-badge replacement-badge--available">Available</span>
@@ -237,8 +241,10 @@
         [activeShiftIds]="activeShiftIds"
         [activeRoleGroupKeys]="activeRoleGroupKeys"
         [onlyShowActive]="boardFilter !== 'all'"
+        [mlPredictionsByShiftId]="mlPredictionsByShiftId"
         (replaceAssignment)="openReplacement($event)"
         (removeAssignment)="removeAssignment($event)"
+        (applyMlPrediction)="applyMlPrediction($event)"
         (updateRequiredStrength)="updateShiftRequiredStrength($event)"
       />
     } @else {

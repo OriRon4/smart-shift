@@ -1,11 +1,12 @@
 # Schema Folder
 
-This folder is reserved for the V1 schema once we write it together.
+This folder contains the full MySQL schema for a fresh Smart-Shift database.
 
-The future schema should stay limited to the current V1 scope:
+Main table groups:
 
-- employees with manager-defined attributes
-- shifts with required waiter coverage
-- shift requests
-- weekly schedules
-- schedule assignments
+- users and authentication data
+- employees and manager-defined employee attributes
+- shifts and shift requirement fields
+- shift availability requests
+- weekly schedules and schedule assignments
+- ML performance logs and saved predictions

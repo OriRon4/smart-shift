@@ -1,53 +1,103 @@
 # Smart-Shift
 
-Smart-Shift is currently a structure-only V1 workspace.
+Smart-Shift is a restaurant shift scheduling system for a Grade 14 software
+engineering final project.
 
-There is intentionally no implementation code in the repository right now. We are building the project step by step from the two markdown files currently in the repo.
+## Main Stack
 
-## Current Source Of Truth
+- Frontend: Angular
+- Backend: Node.js / Express
+- Database: MySQL
+- Security: JWT authentication, RBAC, bcrypt password hashing
+- ML: Python scripts that predict shift requirements before scheduling
 
-- [SmartShift_Codex_Master_Prompt_V1 (1).md](C:/Users/Ori/Documents/GitHub/smart-shift/SmartShift_Codex_Master_Prompt_V1%20(1).md)
-- [SmartShift_Codex_Working_Method_Prompt (2).md](C:/Users/Ori/Documents/GitHub/smart-shift/SmartShift_Codex_Working_Method_Prompt%20(2).md)
+## Final System Scope
 
-These two files now define both:
-- the Smart-Shift V1 product direction
-- how we implement it together, step by step
+Smart-Shift supports:
 
-## Structure
+- login and worker registration
+- role-based access for manager, shift manager, and employee
+- employee management
+- employee availability submission and manager review
+- schedule generation with a heuristic scheduling algorithm
+- schedule editing, replace/remove assignments, validation, and publish/unpublish
+- shift requirement editing
+- ML recommendations for:
+  - `recommended_waiters`
+  - `recommended_strength_score`
+
+ML does not assign employees and does not replace the scheduling algorithm.
+Managers review and apply ML recommendations before the heuristic algorithm uses
+the updated shift requirement fields.
+
+## Project Structure
 
 ```text
 backend-node.js/
   src/
     algorithms/
     config/
+    constants/
     controllers/
+    middleware/
     repositories/
     routes/
     services/
     utils/
+  scripts/
+
 frontend-angular/
   src/
     app/
+      core/
       features/
+        auth/
+        availability/
+        dashboard/
+        employees/
         schedule/
-          components/
-            schedule-grid/
-            week-selector/
-          models/
-          pages/
-            schedule-board/
-          services/
-    assets/
+      shared/
+
 db-mysql/
   schema/
+  migrations/
   seed/
+
+ml/
+  models/
+  train_shift_requirements_model.py
+  predict_shift_requirements.py
+  ml_utils.py
 ```
 
-## Working Rules
+## Quick Start
 
-- No backend code yet
-- No frontend code yet
-- No SQL implementation yet
-- Only folders, docs, and placeholders until we build each piece together
-- The frontend structure is centered on the single V1 `schedule` feature
-- The backend stays ready for routing, service, repository, and algorithm layers around schedule generation
+See `SETUP_AND_RUN.md` for full setup instructions.
+
+Useful commands:
+
+```powershell
+cd backend-node.js
+npm install
+npm start
+```
+
+```powershell
+cd frontend-angular
+npm install
+npm run build
+npm start
+```
+
+```powershell
+python -m pip install -r ml/requirements.txt
+python ml/train_shift_requirements_model.py
+python ml/predict_shift_requirements.py --shift-id 1 --day-of-week 5 --shift-type evening --is-weekend --expected-customer-load 230 --manager-rating 8.4
+```
+
+Backend smoke test:
+
+```powershell
+cd backend-node.js
+npm run test:ml
+```

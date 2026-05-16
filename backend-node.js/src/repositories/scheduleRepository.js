@@ -414,7 +414,7 @@ async function touchWeeklySchedule(connection, scheduleId, options = {}) {
   );
 }
 
-async function saveScheduleAssignments(weekStartDate, assignments) {
+async function saveScheduleAssignments(weekStartDate, assignments, options = {}) {
   if (!assignments.length) {
     const error = new Error("Cannot save a schedule without assignments");
     error.statusCode = 400;
@@ -439,7 +439,7 @@ async function saveScheduleAssignments(weekStartDate, assignments) {
     if (existingSchedule) {
       await deleteScheduleAssignmentsByScheduleId(connection, scheduleId);
       await touchWeeklySchedule(connection, scheduleId, {
-        clearPublished: true,
+        clearPublished: !options.preservePublished,
       });
     }
 
@@ -454,7 +454,9 @@ async function saveScheduleAssignments(weekStartDate, assignments) {
     return {
       scheduleId,
       weekStartDate: weekRange.weekStartDate,
-      publishedAt: null,
+      publishedAt: options.preservePublished
+        ? formatDateTimeValue(existingSchedule?.published_at)
+        : null,
       savedAssignmentCount,
       replacedExisting: Boolean(existingSchedule),
     };

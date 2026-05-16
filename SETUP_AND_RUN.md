@@ -1,96 +1,48 @@
 # Smart-Shift Setup and Run Guide
 
-This guide explains how to run the Smart-Shift backend on a new computer.
+This guide explains how to run Smart-Shift locally for development and final
+demo testing.
 
-## 1. Required Software
+## 1. Requirements
 
-Install these first:
-
-- Node.js
-- npm
+- Node.js and npm
 - MySQL Server
-- A MySQL client, such as MySQL Workbench, phpMyAdmin, or the `mysql` command line
-- Thunder Client or Postman for testing the API
+- Python 3
+- MySQL client, such as MySQL Workbench or the `mysql` command line
 
-To check Node.js and npm:
+## 2. Database Setup
 
-```powershell
-node -v
-npm -v
-```
-
-## 2. Install Backend Dependencies
-
-From the project root:
-
-```powershell
-cd backend-node.js
-npm install
-```
-
-This installs the backend dependencies from `package.json`.
-
-## 3. Create the Database
-
-Open your MySQL client and run:
+Create the database:
 
 ```sql
 CREATE DATABASE smart_shift;
 ```
 
-Then select the database:
-
-```sql
-USE smart_shift;
-```
-
-## 4. Run `schema.sql`
-
-Run the schema file:
-
-```text
-db-mysql/schema/schema.sql
-```
-
-Using the MySQL command line from the project root:
+From the project root, run the schema:
 
 ```powershell
 mysql -u root -p smart_shift < db-mysql/schema/schema.sql
 ```
 
-This creates the tables:
-
-- `employees`
-- `shifts`
-- `shift_requests`
-- `weekly_schedules`
-- `schedule_assignments`
-
-## 5. Run `seed.sql`
-
-Run the seed file:
-
-```text
-db-mysql/seed/seed.sql
-```
-
-Using the MySQL command line from the project root:
+Run core demo data:
 
 ```powershell
 mysql -u root -p smart_shift < db-mysql/seed/seed.sql
 ```
 
-This inserts demo data for employees, shifts, and shift requests.
+Run synthetic ML training demo data:
 
-## 6. Create the `.env` File
-
-Inside `backend-node.js`, create a file named:
-
-```text
-.env
+```powershell
+mysql -u root -p smart_shift < db-mysql/seed/ml_shift_performance_seed.sql
 ```
 
-Use this format:
+For an older database, keep the migration files in `db-mysql/migrations/` and
+apply the needed versions in order. Do not delete old migrations because they
+document how an existing demo database moves to the final schema.
+
+## 3. Backend Environment
+
+Create `backend-node.js/.env`:
 
 ```env
 PORT=3000
@@ -99,222 +51,136 @@ DB_PORT=3306
 DB_NAME=smart_shift
 DB_USER=root
 DB_PASSWORD=your_password_here
+JWT_SECRET=replace_with_a_long_random_secret
 ```
 
-Change `DB_USER` and `DB_PASSWORD` to match your local MySQL setup.
+`JWT_SECRET` is required. The backend should not start without it.
 
-## 7. Start the Backend
-
-From the backend folder:
+## 4. Backend
 
 ```powershell
 cd backend-node.js
+npm install
 npm start
 ```
 
-Expected output:
-
-```text
-Smart-Shift server is running on port 3000
-```
-
-The backend base URL is:
+Backend URL:
 
 ```text
 http://localhost:3000
 ```
 
-## 8. Test `POST /api/schedules/generate`
-
-In Thunder Client or Postman:
-
-Method:
+API base URL:
 
 ```text
-POST
+http://localhost:3000/api
 ```
 
-URL:
-
-```text
-http://localhost:3000/api/schedules/generate
-```
-
-Headers:
-
-```text
-Content-Type: application/json
-```
-
-Body:
-
-```json
-{
-  "weekStartDate": "2026-04-19"
-}
-```
-
-## 9. What Should Happen on First Run
-
-The first request for a week should return:
-
-```text
-201 Created
-```
-
-Expected response shape:
-
-```json
-{
-  "message": "Schedule generated successfully",
-  "weekStartDate": "2026-04-19",
-  "weekEndDate": "2026-04-25",
-  "algorithmResult": {
-    "forcedShifts": [],
-    "forcedAssignments": [],
-    "orderedShifts": [],
-    "remainingAssignments": [],
-    "allAssignments": [],
-    "shiftValidationSummaries": []
-  },
-  "persistenceResult": {
-    "scheduleId": 1,
-    "weekStartDate": "2026-04-19",
-    "savedAssignmentCount": 20
-  }
-}
-```
-
-The exact counts can be different depending on the seed data.
-
-The backend should save:
-
-- one row in `weekly_schedules`
-- multiple rows in `schedule_assignments`
-
-You can verify with:
-
-```sql
-SELECT *
-FROM weekly_schedules
-WHERE week_start_date = '2026-04-19';
-```
-
-```sql
-SELECT *
-FROM schedule_assignments
-WHERE schedule_id = 1;
-```
-
-## 10. What Should Happen on Second Run for the Same Week
-
-If you send the same request again for:
-
-```json
-{
-  "weekStartDate": "2026-04-19"
-}
-```
-
-The backend should return:
-
-```text
-409 Conflict
-```
-
-Expected response:
-
-```json
-{
-  "message": "Schedule already exists for this week"
-}
-```
-
-This happens because `weekly_schedules.week_start_date` is unique, and the backend has a duplicate-week guard.
-
-No new schedule row should be created, and no new assignments should be inserted.
-
-## 11. Common Errors
-
-### `ECONNREFUSED`
-
-The backend server is not running, or the request is using the wrong port.
-
-Fix:
+## 5. Frontend
 
 ```powershell
-cd backend-node.js
+cd frontend-angular
+npm install
 npm start
 ```
 
-### `Access denied for user`
-
-The MySQL username or password in `.env` is incorrect.
-
-Fix:
-
-Check:
-
-```env
-DB_USER=root
-DB_PASSWORD=your_password_here
-```
-
-### `Unknown database 'smart_shift'`
-
-The database was not created.
-
-Fix:
-
-```sql
-CREATE DATABASE smart_shift;
-```
-
-Then run `schema.sql` and `seed.sql`.
-
-### `Table ... doesn't exist`
-
-The schema file was not run, or it was run on the wrong database.
-
-Fix:
-
-```powershell
-mysql -u root -p smart_shift < db-mysql/schema/schema.sql
-```
-
-### `weekStartDate is required`
-
-The request body is missing `weekStartDate`, or the request is not being sent as JSON.
-
-Fix:
-
-Use:
-
-```json
-{
-  "weekStartDate": "2026-04-19"
-}
-```
-
-And set:
+Angular runs locally on:
 
 ```text
-Content-Type: application/json
+http://localhost:4200
 ```
 
-### `Schedule already exists for this week`
+The frontend API URL is centralized in:
 
-The schedule was already generated for that `weekStartDate`.
+```text
+frontend-angular/src/environments/environment.ts
+```
 
-This is expected on the second request for the same week.
+## 6. ML Scripts
 
-### `Cannot save a generated schedule without assignments`
+Install Python dependencies from the project root:
 
-The algorithm did not produce any assignments.
+```powershell
+python -m pip install -r ml/requirements.txt
+```
 
-Possible causes:
+Train models:
 
-- no shift requests exist for the selected week
-- no active waiter employees exist
-- the seed data was not inserted correctly
-- the selected week does not match the seeded shifts
+```powershell
+python ml/train_shift_requirements_model.py
+```
+
+Run one prediction example:
+
+```powershell
+python ml/predict_shift_requirements.py --shift-id 1 --day-of-week 5 --shift-type evening --is-weekend --expected-customer-load 230 --manager-rating 8.4
+```
+
+The ML demo data is synthetic. It is used for project demonstration, not claimed
+as real restaurant production data.
+
+## 7. Demo Accounts
+
+All seeded demo accounts use password:
+
+```text
+password
+```
+
+Accounts:
+
+- Manager: `manager@example.com`
+- Shift manager: `leader@example.com`
+- Employee: `employee@example.com`
+
+## 8. Final Smoke Tests
+
+Frontend build:
+
+```powershell
+cd frontend-angular
+npm run build
+```
+
+Backend syntax check example:
+
+```powershell
+cd backend-node.js
+node --check src/app.js
+```
+
+Backend ML/API smoke test, with backend already running on port 3000:
+
+```powershell
+cd backend-node.js
+npm run test:ml
+```
+
+## 9. Recommended Manual Demo Flow
+
+1. Login as manager.
+2. Open Schedule.
+3. Generate ML recommendations.
+4. Open a shift requirement editor and apply one ML recommendation.
+5. Generate schedule.
+6. Replace or remove an assignment.
+7. Save changes.
+8. Validate schedule.
+9. Publish schedule.
+10. Login as employee and verify the published schedule is visible.
+11. Unpublish as manager and verify employee no longer sees the schedule.
+12. Submit/update employee availability.
+
+## 10. Common Issues
+
+`ECONNREFUSED`: backend is not running on port 3000.
+
+`Access denied for user`: check `DB_USER` and `DB_PASSWORD` in `.env`.
+
+`JWT_SECRET is required`: add `JWT_SECRET` to `.env`.
+
+`Route not found`: confirm the frontend uses `http://localhost:3000/api` and
+the backend was restarted after code changes.
+
+`Schedule has not been published yet`: expected for employee/shift manager when
+manager has not published the selected week.
