@@ -30,11 +30,12 @@ async function generateSchedule(req, res, next) {
 
 async function saveAssignments(req, res, next) {
   try {
-    const { weekStartDate, assignments } = req.body || {};
+    const { weekStartDate, assignments, overrideWarnings } = req.body || {};
     const savedSchedule = await scheduleService.saveScheduleAssignments(
       req.params.scheduleId,
       weekStartDate,
       assignments,
+      Boolean(overrideWarnings),
       req.user
     );
 

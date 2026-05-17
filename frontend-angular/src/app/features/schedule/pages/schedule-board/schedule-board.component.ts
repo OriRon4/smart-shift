@@ -710,11 +710,25 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
           : true
       )
       .sort((leftEmployee, rightEmployee) => {
-        const leftStatus = this.getReplacementSortRank(leftEmployee);
-        const rightStatus = this.getReplacementSortRank(rightEmployee);
+        const leftStatus = this.getReplacementGroupRank(leftEmployee);
+        const rightStatus = this.getReplacementGroupRank(rightEmployee);
 
         if (leftStatus !== rightStatus) {
           return leftStatus - rightStatus;
+        }
+
+        if (leftStatus === 3 && leftEmployee.jobRole !== rightEmployee.jobRole) {
+          return this.formatEmployeeRole(leftEmployee).localeCompare(
+            this.formatEmployeeRole(rightEmployee)
+          );
+        }
+
+        const scoreGap =
+          this.calculateReplacementCompatibilityScore(rightEmployee) -
+          this.calculateReplacementCompatibilityScore(leftEmployee);
+
+        if (scoreGap !== 0) {
+          return scoreGap;
         }
 
         return leftEmployee.fullName.localeCompare(rightEmployee.fullName);
@@ -726,16 +740,36 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     employees: Employee[];
   }[] {
     const candidates = this.getReplacementCandidates();
-    const sameRoleEmployees = candidates.filter(
-      (employee) => employee.jobRole === this.pendingReplacement?.jobRole
+    const sameRoleAvailable = candidates.filter(
+      (employee) => this.getReplacementGroupRank(employee) === 0
+    );
+    const sameRoleUnavailable = candidates.filter(
+      (employee) => this.getReplacementGroupRank(employee) === 1
+    );
+    const sameRoleProblematic = candidates.filter(
+      (employee) => this.getReplacementGroupRank(employee) === 2
     );
     const otherRoleEmployees = candidates.filter(
-      (employee) => employee.jobRole !== this.pendingReplacement?.jobRole
+      (employee) => this.getReplacementGroupRank(employee) === 3
+    );
+    const otherRoleSections = this.groupOtherRoleReplacementCandidates(
+      otherRoleEmployees
     );
 
     return [
-      { title: 'Same role candidates', employees: sameRoleEmployees },
-      { title: 'Other roles', employees: otherRoleEmployees },
+      {
+        title: 'Same role - available',
+        employees: sameRoleAvailable
+      },
+      {
+        title: 'Same role - not available',
+        employees: sameRoleUnavailable
+      },
+      {
+        title: 'Same role - works same day / problematic',
+        employees: sameRoleProblematic
+      },
+      ...otherRoleSections,
     ].filter((section) => section.employees.length > 0);
   }
 
@@ -906,27 +940,132 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     return this.calculateEmployeeStrength(employee).toFixed(1);
   }
 
-  private getReplacementSortRank(employee: Employee): number {
-    if (employee.isActive === false) {
-      return 4;
-    }
+  protected isEmployeeRoleMismatchForPendingShift(employee: Employee): boolean {
+    return Boolean(
+      this.pendingReplacement &&
+        employee.jobRole !== this.pendingReplacement.jobRole
+    );
+  }
 
-    if (this.isEmployeeScheduledForPendingShift(employee)) {
-      return 3;
-    }
+  protected getReplacementCompatibilityLabel(employee: Employee): string {
+    return `${this.calculateReplacementCompatibilityScore(employee)} fit`;
+  }
 
-    if (this.isEmployeeAvailableForPendingShift(employee)) {
-      return 0;
-    }
+  private getReplacementGroupRank(employee: Employee): number {
+    const sameRole = employee.jobRole === this.pendingReplacement?.jobRole;
+    const problematic =
+      employee.isActive === false ||
+      this.isEmployeeScheduledForPendingShift(employee) ||
+      this.isEmployeeWorkingSameDay(employee);
 
-    if (this.isEmployeeWorkingSameDay(employee)) {
+    if (sameRole && problematic) {
       return 2;
     }
 
-    return 1;
+    if (sameRole && this.isEmployeeAvailableForPendingShift(employee)) {
+      return 0;
+    }
+
+    if (sameRole) {
+      return 1;
+    }
+
+    return 3;
   }
 
-  protected saveChanges(): void {
+  private groupOtherRoleReplacementCandidates(employees: Employee[]): {
+    title: string;
+    employees: Employee[];
+  }[] {
+    const employeesByRole = new Map<string, Employee[]>();
+
+    for (const employee of employees) {
+      const role = employee.jobRole || 'employee';
+      employeesByRole.set(role, [...(employeesByRole.get(role) || []), employee]);
+    }
+
+    return [...employeesByRole.entries()]
+      .sort(([leftRole], [rightRole]) =>
+        this.formatJobRole(leftRole).localeCompare(this.formatJobRole(rightRole))
+      )
+      .map(([role, roleEmployees]) => ({
+        title: `Other role - ${this.formatJobRole(role)}`,
+        employees: roleEmployees.sort(
+          (leftEmployee, rightEmployee) =>
+            this.calculateReplacementCompatibilityScore(rightEmployee) -
+              this.calculateReplacementCompatibilityScore(leftEmployee) ||
+            leftEmployee.fullName.localeCompare(rightEmployee.fullName)
+        ),
+      }));
+  }
+
+  private calculateReplacementCompatibilityScore(employee: Employee): number {
+    const roleMatches = employee.jobRole === this.pendingReplacement?.jobRole;
+    const available = this.isEmployeeAvailableForPendingShift(employee);
+    const strengthScore = this.calculateEmployeeStrength(employee);
+    const assigned = this.getAssignedShiftCount(employee.id);
+    const requested = this.getRequestedShiftCount(employee.id);
+    const target = this.calculateTargetShifts(employee, requested);
+    const fairnessGapScore = Math.max(0, target - assigned) / Math.max(1, target);
+    const roleGroup = this.getPendingReplacementRoleGroup();
+    const currentEmployee = this.employees.find(
+      (candidate) => candidate.id === this.pendingReplacement?.employeeId
+    );
+    const currentStrength = currentEmployee
+      ? this.calculateEmployeeStrength(currentEmployee)
+      : 0;
+    const assignedStrength = roleGroup?.assignedStrengthScore || 0;
+    const requiredStrength = roleGroup?.requiredStrengthScore || 0;
+    const projectedStrength =
+      assignedStrength - currentStrength + strengthScore;
+    const strengthFitScore =
+      requiredStrength > 0
+        ? Math.min(1, projectedStrength / requiredStrength)
+        : strengthScore / 10;
+    const sameDayPenalty =
+      this.isEmployeeWorkingSameDay(employee) ||
+      this.isEmployeeScheduledForPendingShift(employee)
+        ? 30
+        : 0;
+    const inactivePenalty = employee.isActive === false ? 100 : 0;
+
+    return Number(
+      (
+        (available ? 30 : 0) +
+        (roleMatches ? 25 : -20) +
+        strengthScore * 3 +
+        fairnessGapScore * 20 +
+        strengthFitScore * 15 -
+        sameDayPenalty -
+        inactivePenalty
+      ).toFixed(1)
+    );
+  }
+
+  private getPendingReplacementRoleGroup(): ScheduleRoleGroup | null {
+    if (!this.board || !this.pendingReplacement) {
+      return null;
+    }
+
+    for (const day of this.board.days) {
+      for (const shift of day.shifts) {
+        if (shift.shiftId !== this.pendingReplacement.shiftId) {
+          continue;
+        }
+
+        return (
+          shift.roleGroups.find(
+            (roleGroup) =>
+              roleGroup.jobRole === this.pendingReplacement?.jobRole
+          ) || null
+        );
+      }
+    }
+
+    return null;
+  }
+
+  protected saveChanges(overrideWarnings = false): void {
     if (!this.board?.scheduleId || !this.canSaveScheduleAssignments()) {
       return;
     }
@@ -939,16 +1078,31 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
       .saveAssignments(
         this.board.scheduleId,
         this.selectedWeekStartDate,
-        this.flattenAssignments(this.board)
+        this.flattenAssignments(this.board),
+        overrideWarnings
       )
       .subscribe({
         next: (board) => {
           this.board = board;
-          this.successMessage = 'Schedule changes saved.';
+          this.successMessage = overrideWarnings
+            ? 'Schedule changes saved with manager override.'
+            : 'Schedule changes saved.';
           this.hasUnsavedChanges = false;
           this.isLoading = false;
         },
         error: (error: unknown) => {
+          if (this.canManageSchedule() && this.isAssignmentWarningError(error)) {
+            const confirmed = window.confirm(
+              'Assignments include warnings. Save anyway with manager override?'
+            );
+
+            if (confirmed) {
+              this.isLoading = false;
+              this.saveChanges(true);
+              return;
+            }
+          }
+
           this.errorMessage = this.resolveErrorMessage(error);
           this.isLoading = false;
         }
@@ -1352,5 +1506,14 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     }
 
     return 'Schedule action failed. Check that the backend is running and try again.';
+  }
+
+  private isAssignmentWarningError(error: unknown): boolean {
+    return Boolean(
+      error instanceof HttpErrorResponse &&
+        error.status === 400 &&
+        Array.isArray(error.error?.details?.warnings) &&
+        error.error.details.warnings.length > 0
+    );
   }
 }

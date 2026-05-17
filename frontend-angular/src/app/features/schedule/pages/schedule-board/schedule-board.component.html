@@ -177,15 +177,20 @@
                   <div class="replacement-row__main">
                     <strong>{{ employee.fullName }}</strong>
                     <span>{{ formatEmployeeRole(employee) }} - {{ getEmployeeTargetRatio(employee) }}</span>
-                    <small>{{ getEmployeeStrengthLabel(employee) }} strength</small>
+                    <small>{{ getEmployeeStrengthLabel(employee) }} strength - {{ getReplacementCompatibilityLabel(employee) }}</small>
                     <div class="replacement-row__badges">
                       @if (isEmployeeAvailableForPendingShift(employee)) {
                         <span class="replacement-badge replacement-badge--available">Available</span>
+                      } @else {
+                        <span class="replacement-badge replacement-badge--unavailable">Not available</span>
                       }
                       @if (isEmployeeScheduledForPendingShift(employee)) {
                         <span class="replacement-badge replacement-badge--scheduled">Scheduled</span>
                       } @else if (isEmployeeWorkingSameDay(employee)) {
                         <span class="replacement-badge replacement-badge--same-day">Works same day</span>
+                      }
+                      @if (isEmployeeRoleMismatchForPendingShift(employee)) {
+                        <span class="replacement-badge replacement-badge--role-mismatch">Role mismatch</span>
                       }
                       @if (employee.isActive === false) {
                         <span class="replacement-badge replacement-badge--inactive">Inactive</span>

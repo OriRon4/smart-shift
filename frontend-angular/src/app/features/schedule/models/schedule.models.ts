@@ -8,6 +8,8 @@ export interface ScheduleBoardResponse {
   canEdit: boolean;
   canManage: boolean;
   summary?: ScheduleSummary;
+  improvementSummary?: ScheduleImprovementSummary;
+  warnings?: ScheduleAssignmentWarning[];
   days: ScheduleDay[];
 }
 
@@ -99,6 +101,40 @@ export interface ScheduleWarning {
   jobRole: JobRole;
   uncoveredSlots: number;
   meetsStrengthTarget: boolean;
+}
+
+export interface ScheduleImprovementSummary {
+  iterationsRun: number;
+  scoreBefore: ScheduleScore;
+  scoreAfter: ScheduleScore;
+  issuesBefore: ScheduleIssueCounts;
+  issuesAfter: ScheduleIssueCounts;
+  acceptedSwaps: unknown[];
+  rejectedSwaps: number;
+  correctionLog: unknown[];
+}
+
+export interface ScheduleScore {
+  totalScore: number;
+  uncoveredSlots: number;
+  strengthDeficit: number;
+  sameDayPenaltyCount: number;
+  fairnessGap: number;
+}
+
+export interface ScheduleIssueCounts {
+  uncoveredRoleGroups: number;
+  belowStrengthRoleGroups: number;
+  sameDayDoubleShifts: number;
+  employeesUnderTarget: number;
+}
+
+export interface ScheduleAssignmentWarning {
+  type: string;
+  shiftId: number;
+  employeeId: number;
+  jobRole: JobRole;
+  message: string;
 }
 
 export type JobRole = 'waiter' | 'bartender' | 'shift_leader' | 'manager';

@@ -32,13 +32,15 @@ export class ScheduleApiService {
   saveAssignments(
     scheduleId: number,
     weekStartDate: string,
-    assignments: SaveScheduleAssignment[]
+    assignments: SaveScheduleAssignment[],
+    overrideWarnings = false
   ): Observable<ScheduleBoardResponse> {
     return this.http.patch<ScheduleBoardResponse>(
       `${this.apiUrl}/${scheduleId}/assignments`,
       {
         weekStartDate,
-        assignments
+        assignments,
+        overrideWarnings
       }
     );
   }

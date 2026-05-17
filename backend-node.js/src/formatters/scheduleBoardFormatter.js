@@ -232,6 +232,10 @@ function buildScheduleBoardResponse(
     days,
   };
 
+  if (algorithmResult.improvementSummary) {
+    response.improvementSummary = algorithmResult.improvementSummary;
+  }
+
   if (includeManagerMetrics) {
     response.summary = {
       totalShifts: days.flatMap((day) => day.shifts).length,

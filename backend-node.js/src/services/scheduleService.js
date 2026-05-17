@@ -239,24 +239,41 @@ function buildManualAssignmentWarnings(scheduleInputs, assignments) {
       employee,
     ])
   );
+  const shiftById = new Map(
+    scheduleInputs.shifts.map((shift) => [shift.id, shift])
+  );
   const requestedShiftByEmployee = new Set(
     scheduleInputs.shiftRequests.map(
       (shiftRequest) => `${shiftRequest.employee_id}:${shiftRequest.shift_id}`
     )
   );
   const assignmentCountByShiftAndEmployee = new Map();
+  const assignmentCountByEmployeeAndDate = new Map();
 
   for (const assignment of assignments) {
-    const key = `${assignment.shiftId}:${assignment.employeeId}`;
+    const shiftEmployeeKey = `${assignment.shiftId}:${assignment.employeeId}`;
     assignmentCountByShiftAndEmployee.set(
-      key,
-      (assignmentCountByShiftAndEmployee.get(key) || 0) + 1
+      shiftEmployeeKey,
+      (assignmentCountByShiftAndEmployee.get(shiftEmployeeKey) || 0) + 1
     );
+
+    const shift = shiftById.get(assignment.shiftId);
+
+    if (shift) {
+      const employeeDateKey = `${assignment.employeeId}:${formatDateKey(
+        shift.shift_date
+      )}`;
+      assignmentCountByEmployeeAndDate.set(
+        employeeDateKey,
+        (assignmentCountByEmployeeAndDate.get(employeeDateKey) || 0) + 1
+      );
+    }
   }
 
   return assignments.flatMap((assignment) => {
     const warnings = [];
     const employee = employeesById.get(assignment.employeeId);
+    const shift = shiftById.get(assignment.shiftId);
 
     if (!employee) {
       return warnings;
@@ -311,6 +328,22 @@ function buildManualAssignmentWarnings(scheduleInputs, assignments) {
       });
     }
 
+    if (
+      shift &&
+      (assignmentCountByEmployeeAndDate.get(
+        `${assignment.employeeId}:${formatDateKey(shift.shift_date)}`
+      ) || 0) > 1
+    ) {
+      warnings.push({
+        type: "employee_scheduled_multiple_shifts_same_day",
+        shiftId: assignment.shiftId,
+        employeeId: assignment.employeeId,
+        jobRole: assignment.jobRole,
+        date: formatDateKey(shift.shift_date),
+        message: "Employee is scheduled more than once on the same day",
+      });
+    }
+
     return warnings;
   });
 }
@@ -319,6 +352,7 @@ async function saveScheduleAssignments(
   scheduleId,
   weekStartDate,
   assignmentsBody,
+  overrideWarnings,
   user
 ) {
   const persistedSchedule = await resolveScheduleWeek(
@@ -345,6 +379,21 @@ async function saveScheduleAssignments(
   );
   const assignments = validateAssignmentPayload(assignmentsBody);
   ensureAssignmentsMatchWeekAndRoles(scheduleInputs, assignments);
+  const warnings = buildManualAssignmentWarnings(scheduleInputs, assignments);
+
+  if (overrideWarnings && user.permissionRole !== PERMISSION_ROLES.MANAGER) {
+    throw createHttpError(403, "Only managers can override assignment warnings");
+  }
+
+  if (warnings.length && !overrideWarnings) {
+    throw createHttpError(
+      400,
+      "Assignments contain warnings. Review them or save with overrideWarnings as a manager.",
+      {
+        warnings,
+      }
+    );
+  }
 
   const persistedAssignments = buildPersistedAssignments(
     scheduleInputs.allEmployees || scheduleInputs.employees,
@@ -369,6 +418,7 @@ async function saveScheduleAssignments(
       publishedAt: persistenceResult.publishedAt,
       permissionRole: user.permissionRole,
     }),
+    warnings,
     persistenceResult,
   };
 }
@@ -501,8 +551,12 @@ async function updateShiftRequiredStrength(shiftId, requiredStrengthScore, user)
     throw createHttpError(400, "shiftId must be a positive integer");
   }
 
-  if (!Number.isFinite(numericStrength) || numericStrength < 0) {
-    throw createHttpError(400, "requiredStrengthScore must be a non-negative number");
+  if (
+    !Number.isFinite(numericStrength) ||
+    numericStrength < 0 ||
+    numericStrength > 100
+  ) {
+    throw createHttpError(400, "requiredStrengthScore must be between 0 and 100");
   }
 
   const updatedShift = await scheduleRepository.updateShiftRequiredStrength(

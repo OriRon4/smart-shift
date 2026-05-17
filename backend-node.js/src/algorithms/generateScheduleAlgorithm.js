@@ -36,6 +36,22 @@ function calculateFairnessGapScore(fairnessGap, targetShifts) {
   return fairnessGap / Math.max(1, targetShifts);
 }
 
+function roundScore(value) {
+  return Number(Number(value || 0).toFixed(2));
+}
+
+function formatDateKey(value) {
+  if (value instanceof Date) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }
+
+  return String(value).slice(0, 10);
+}
+
 function buildRequestedShiftCountsByEmployee(shiftRequests) {
   const requestedShiftCountsByEmployee = new Map();
 
@@ -415,13 +431,401 @@ function buildRoleValidationSummaries(shifts, assignments, employees) {
   );
 }
 
+function buildShiftById(shifts) {
+  return new Map(shifts.map((shift) => [shift.id, shift]));
+}
+
+function buildAvailabilitySet(shiftRequests) {
+  return new Set(
+    shiftRequests.map(
+      (shiftRequest) => `${shiftRequest.employee_id}:${shiftRequest.shift_id}`
+    )
+  );
+}
+
+function buildEmployeeById(employees) {
+  return new Map(employees.map((employee) => [employee.id, employee]));
+}
+
+function findSameDayDoubleShiftIssues(assignments, shifts) {
+  const shiftById = buildShiftById(shifts);
+  const assignmentsByEmployeeAndDate = new Map();
+
+  for (const assignment of assignments) {
+    const shift = shiftById.get(assignment.shiftId);
+
+    if (!shift) {
+      continue;
+    }
+
+    const dateKey = formatDateKey(shift.shift_date);
+    const key = `${assignment.employeeId}:${dateKey}`;
+    const existingAssignments = assignmentsByEmployeeAndDate.get(key) || [];
+
+    existingAssignments.push(assignment);
+    assignmentsByEmployeeAndDate.set(key, existingAssignments);
+  }
+
+  return [...assignmentsByEmployeeAndDate.entries()].flatMap(
+    ([key, dayAssignments]) => {
+      if (dayAssignments.length <= 1) {
+        return [];
+      }
+
+      const [employeeId, date] = key.split(":");
+
+      return [
+        {
+          type: "same_day_double_shift",
+          employeeId: Number(employeeId),
+          date,
+          assignmentCount: dayAssignments.length,
+          extraAssignments: dayAssignments.length - 1,
+          shiftIds: dayAssignments.map((assignment) => assignment.shiftId),
+        },
+      ];
+    }
+  );
+}
+
+function findFairnessIssues(scheduleInputs, assignments) {
+  const employeeStateById = buildEmployeeStateById(
+    scheduleInputs.employees,
+    scheduleInputs.shiftRequests,
+    assignments
+  );
+
+  return [...employeeStateById.values()]
+    .map((employeeState) => {
+      const gap = calculateFairnessGap(
+        employeeState.targetShifts,
+        employeeState.assignedShifts
+      );
+
+      return {
+        type: "employee_under_target",
+        employeeId: employeeState.employeeId,
+        requestedShifts: employeeState.requestedShifts,
+        assignedShifts: employeeState.assignedShifts,
+        targetShifts: roundScore(employeeState.targetShifts),
+        gap: roundScore(gap),
+      };
+    })
+    .filter((issue) => issue.requestedShifts > 0 && issue.gap > 0.5);
+}
+
+function findScheduleIssues(scheduleInputs, assignments) {
+  const validationSummaries = buildRoleValidationSummaries(
+    scheduleInputs.shifts,
+    assignments,
+    scheduleInputs.employees
+  );
+  const uncoveredRoleGroups = validationSummaries
+    .filter((summary) => summary.uncoveredSlots > 0)
+    .map((summary) => ({
+      type: "uncovered_role_group",
+      shiftId: summary.shiftId,
+      jobRole: summary.jobRole,
+      uncoveredSlots: summary.uncoveredSlots,
+    }));
+  const belowStrengthRoleGroups = validationSummaries
+    .filter((summary) => !summary.meetsStrengthTarget)
+    .map((summary) => ({
+      type: "below_strength_target",
+      shiftId: summary.shiftId,
+      jobRole: summary.jobRole,
+      assignedStrengthScore: roundScore(summary.assignedStrengthScore),
+      requiredStrengthScore: roundScore(summary.requiredStrengthScore),
+      strengthDeficit: roundScore(
+        Math.max(
+          0,
+          Number(summary.requiredStrengthScore) -
+            Number(summary.assignedStrengthScore)
+        )
+      ),
+    }));
+  const sameDayDoubleShifts = findSameDayDoubleShiftIssues(
+    assignments,
+    scheduleInputs.shifts
+  );
+  const employeesUnderTarget = findFairnessIssues(scheduleInputs, assignments);
+
+  return {
+    uncoveredRoleGroups,
+    belowStrengthRoleGroups,
+    sameDayDoubleShifts,
+    employeesUnderTarget,
+    counts: {
+      uncoveredRoleGroups: uncoveredRoleGroups.length,
+      belowStrengthRoleGroups: belowStrengthRoleGroups.length,
+      sameDayDoubleShifts: sameDayDoubleShifts.length,
+      employeesUnderTarget: employeesUnderTarget.length,
+    },
+  };
+}
+
+function scoreSchedule(scheduleInputs, assignments) {
+  const issues = findScheduleIssues(scheduleInputs, assignments);
+  const uncoveredSlots = issues.uncoveredRoleGroups.reduce(
+    (total, issue) => total + issue.uncoveredSlots,
+    0
+  );
+  const strengthDeficit = issues.belowStrengthRoleGroups.reduce(
+    (total, issue) => total + issue.strengthDeficit,
+    0
+  );
+  const sameDayPenaltyCount = issues.sameDayDoubleShifts.reduce(
+    (total, issue) => total + issue.extraAssignments,
+    0
+  );
+  const fairnessGap = issues.employeesUnderTarget.reduce(
+    (total, issue) => total + issue.gap,
+    0
+  );
+  const totalScore =
+    uncoveredSlots * 1000 +
+    strengthDeficit * 10 +
+    sameDayPenaltyCount * 0.1 +
+    fairnessGap * 2;
+
+  return {
+    totalScore: roundScore(totalScore),
+    uncoveredSlots,
+    strengthDeficit: roundScore(strengthDeficit),
+    sameDayPenaltyCount,
+    fairnessGap: roundScore(fairnessGap),
+  };
+}
+
+function createsDuplicateShiftAssignment(assignments, assignmentIndex, swap) {
+  const assignment = assignments[assignmentIndex];
+  const targetShiftId = swap.get(assignmentIndex) || assignment.shiftId;
+
+  return assignments.some((otherAssignment, otherIndex) => {
+    if (otherIndex === assignmentIndex) {
+      return false;
+    }
+
+    const otherTargetShiftId =
+      swap.get(otherIndex) || otherAssignment.shiftId;
+
+    return (
+      otherTargetShiftId === targetShiftId &&
+      otherAssignment.employeeId === assignment.employeeId
+    );
+  });
+}
+
+function isValidSameRoleSwap(
+  scheduleInputs,
+  assignments,
+  leftIndex,
+  rightIndex,
+  availabilitySet,
+  employeeById
+) {
+  const leftAssignment = assignments[leftIndex];
+  const rightAssignment = assignments[rightIndex];
+
+  if (
+    leftAssignment.jobRole !== rightAssignment.jobRole ||
+    leftAssignment.shiftId === rightAssignment.shiftId
+  ) {
+    return false;
+  }
+
+  const leftEmployee = employeeById.get(leftAssignment.employeeId);
+  const rightEmployee = employeeById.get(rightAssignment.employeeId);
+
+  if (
+    !leftEmployee ||
+    !rightEmployee ||
+    !leftEmployee.is_active ||
+    !rightEmployee.is_active ||
+    leftEmployee.role !== leftAssignment.jobRole ||
+    rightEmployee.role !== rightAssignment.jobRole
+  ) {
+    return false;
+  }
+
+  if (
+    !availabilitySet.has(
+      `${leftAssignment.employeeId}:${rightAssignment.shiftId}`
+    ) ||
+    !availabilitySet.has(
+      `${rightAssignment.employeeId}:${leftAssignment.shiftId}`
+    )
+  ) {
+    return false;
+  }
+
+  const swap = new Map([
+    [leftIndex, rightAssignment.shiftId],
+    [rightIndex, leftAssignment.shiftId],
+  ]);
+
+  return (
+    !createsDuplicateShiftAssignment(assignments, leftIndex, swap) &&
+    !createsDuplicateShiftAssignment(assignments, rightIndex, swap)
+  );
+}
+
+function swapAssignmentShiftIds(assignments, leftIndex, rightIndex) {
+  const improvedAssignments = assignments.map((assignment) => ({
+    ...assignment,
+  }));
+  const leftShiftId = improvedAssignments[leftIndex].shiftId;
+
+  improvedAssignments[leftIndex].shiftId =
+    improvedAssignments[rightIndex].shiftId;
+  improvedAssignments[rightIndex].shiftId = leftShiftId;
+
+  return improvedAssignments;
+}
+
+function tryImproveBySameRoleSwaps(scheduleInputs, assignments, currentScore) {
+  const availabilitySet = buildAvailabilitySet(scheduleInputs.shiftRequests);
+  const employeeById = buildEmployeeById(scheduleInputs.employees);
+  let bestImprovement = null;
+  let rejectedSwaps = 0;
+
+  for (let leftIndex = 0; leftIndex < assignments.length; leftIndex += 1) {
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < assignments.length;
+      rightIndex += 1
+    ) {
+      if (
+        !isValidSameRoleSwap(
+          scheduleInputs,
+          assignments,
+          leftIndex,
+          rightIndex,
+          availabilitySet,
+          employeeById
+        )
+      ) {
+        rejectedSwaps += 1;
+        continue;
+      }
+
+      const candidateAssignments = swapAssignmentShiftIds(
+        assignments,
+        leftIndex,
+        rightIndex
+      );
+      const candidateScore = scoreSchedule(
+        scheduleInputs,
+        candidateAssignments
+      );
+
+      if (candidateScore.totalScore >= currentScore.totalScore) {
+        rejectedSwaps += 1;
+        continue;
+      }
+
+      if (
+        !bestImprovement ||
+        candidateScore.totalScore < bestImprovement.score.totalScore
+      ) {
+        bestImprovement = {
+          assignments: candidateAssignments,
+          score: candidateScore,
+          swap: {
+            leftEmployeeId: assignments[leftIndex].employeeId,
+            rightEmployeeId: assignments[rightIndex].employeeId,
+            jobRole: assignments[leftIndex].jobRole,
+            leftFromShiftId: assignments[leftIndex].shiftId,
+            leftToShiftId: assignments[rightIndex].shiftId,
+            rightFromShiftId: assignments[rightIndex].shiftId,
+            rightToShiftId: assignments[leftIndex].shiftId,
+          },
+        };
+      }
+    }
+  }
+
+  return {
+    bestImprovement,
+    rejectedSwaps,
+  };
+}
+
+function improveScheduleWithIterations(
+  scheduleInputs,
+  initialAssignments,
+  maxIterations = 50
+) {
+  let assignments = initialAssignments.map((assignment) => ({ ...assignment }));
+  const issuesBefore = findScheduleIssues(scheduleInputs, assignments);
+  const scoreBefore = scoreSchedule(scheduleInputs, assignments);
+  let currentScore = scoreBefore;
+  let rejectedSwaps = 0;
+  const acceptedSwaps = [];
+  const correctionLog = [];
+
+  for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
+    const improvement = tryImproveBySameRoleSwaps(
+      scheduleInputs,
+      assignments,
+      currentScore
+    );
+
+    rejectedSwaps += improvement.rejectedSwaps;
+
+    if (!improvement.bestImprovement) {
+      break;
+    }
+
+    assignments = improvement.bestImprovement.assignments;
+    currentScore = improvement.bestImprovement.score;
+    acceptedSwaps.push(improvement.bestImprovement.swap);
+    correctionLog.push({
+      iteration,
+      scoreAfterSwap: currentScore.totalScore,
+      swap: improvement.bestImprovement.swap,
+    });
+  }
+
+  const issuesAfter = findScheduleIssues(scheduleInputs, assignments);
+  const scoreAfter = scoreSchedule(scheduleInputs, assignments);
+
+  return {
+    assignments,
+    improvementSummary: {
+      iterationsRun: acceptedSwaps.length,
+      scoreBefore,
+      scoreAfter,
+      issuesBefore: issuesBefore.counts,
+      issuesAfter: issuesAfter.counts,
+      acceptedSwaps,
+      rejectedSwaps,
+      correctionLog,
+    },
+  };
+}
+
+function rebuildRoleResultsWithAssignments(roleResults, assignments) {
+  return roleResults.map((roleResult) => ({
+    ...roleResult,
+    assignments: assignments.filter(
+      (assignment) => assignment.jobRole === roleResult.jobRole
+    ),
+  }));
+}
+
 function generateScheduleAlgorithm(scheduleInputs) {
   const roleResults = SCHEDULE_JOB_ROLES.map((roleConfig) =>
     assignRole(scheduleInputs, roleConfig)
   );
-  const allAssignments = roleResults.flatMap(
+  const initialAssignments = roleResults.flatMap(
     (roleResult) => roleResult.assignments
   );
+  const improvementResult = improveScheduleWithIterations(
+    scheduleInputs,
+    initialAssignments
+  );
+  const allAssignments = improvementResult.assignments;
   const shiftValidationSummaries = buildRoleValidationSummaries(
     scheduleInputs.shifts,
     allAssignments,
@@ -429,14 +833,19 @@ function generateScheduleAlgorithm(scheduleInputs) {
   );
 
   return {
-    roleResults,
+    roleResults: rebuildRoleResultsWithAssignments(roleResults, allAssignments),
     allAssignments,
     shiftValidationSummaries,
+    improvementSummary: improvementResult.improvementSummary,
   };
 }
 
 module.exports = {
   calculateStrengthScore,
   buildRoleValidationSummaries,
+  scoreSchedule,
+  findScheduleIssues,
+  tryImproveBySameRoleSwaps,
+  improveScheduleWithIterations,
   generateScheduleAlgorithm,
 };
