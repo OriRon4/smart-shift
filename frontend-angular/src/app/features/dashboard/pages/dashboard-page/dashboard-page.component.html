@@ -3,67 +3,128 @@
     <div>
       <span class="dashboard-hero__eyebrow">Smart-Shift</span>
       <h1>{{ dashboardTitle }}</h1>
-      <p>
-        Welcome, {{ currentUser()?.displayName }}. This view is tailored to your permissions for the selected week.
-      </p>
+      <p>Current week overview</p>
     </div>
 
-    <div class="dashboard-hero__actions">
-      <a routerLink="/schedule">Open Schedule</a>
-      <a routerLink="/availability">Availability</a>
+    <div class="dashboard-hero__tools">
+      <div class="dashboard-hero__actions">
+        <a routerLink="/schedule">Open Schedule</a>
+        <a routerLink="/availability">Availability</a>
+      </div>
     </div>
   </section>
 
   @if (isManager()) {
     <section class="metric-grid">
       <article>
-        <span>Coverage</span>
-        <strong>{{ coveragePercent }}%</strong>
+        <span>Total scheduled shifts</span>
+        <strong>{{ totalShiftsThisWeek }}</strong>
       </article>
       <article>
-        <span>Unfilled slots</span>
-        <strong>{{ unfilledSlots }}</strong>
+        <span>Missing coverage</span>
+        <strong>{{ missingCoverageShiftCount }}</strong>
       </article>
       <article>
-        <span>Availability sent</span>
-        <strong>{{ availabilitySubmissionCount }}/{{ activeEmployeeCount }}</strong>
+        <span>Below strength</span>
+        <strong>{{ belowStrengthShiftCount }}</strong>
       </article>
       <article>
-        <span>Strength risks</span>
-        <strong>{{ strengthRiskGroups }}</strong>
+        <span>Employees assigned</span>
+        <strong>{{ employeesAssignedThisWeek }}</strong>
       </article>
     </section>
 
-    <section class="dashboard-panel">
-      <header>
-        <h2>Manager Focus</h2>
-        <a routerLink="/employees">Manage employees</a>
-      </header>
-      <div class="manager-dashboard-grid">
-        <article class="manager-card">
-          <span>Role mix</span>
-          <div class="role-mix">
-            <strong>{{ waiterCount }}</strong><small>Waiters</small>
-            <strong>{{ bartenderCount }}</strong><small>Bartenders</small>
-            <strong>{{ shiftLeaderCount }}</strong><small>Shift managers</small>
-          </div>
-        </article>
+    <section class="manager-dashboard-grid">
+      <article class="dashboard-panel dashboard-panel--compact">
+        <header>
+          <h2>Coverage overview</h2>
+          <a routerLink="/schedule">Open board</a>
+        </header>
 
-        <article class="manager-card">
-          <span>Availability volume</span>
-          <strong>{{ availabilityShiftCount }}</strong>
-          <p>Total available shift selections submitted for the week.</p>
-        </article>
-
-        <article class="manager-card manager-card--wide">
-          <span>Action list</span>
-          <div class="alert-list">
-            @for (alert of managerAlerts; track alert) {
-              <p>{{ alert }}</p>
-            }
+        @if (hasManagerDashboardData) {
+          <div class="dashboard-snapshot">
+            <strong>{{ coverageSummaryText }}</strong>
+            <span>{{ unfilledSlots }} missing assignment{{ unfilledSlots === 1 ? '' : 's' }}</span>
           </div>
-        </article>
-      </div>
+        } @else {
+          <p class="dashboard-empty">No saved schedule data for the current week.</p>
+        }
+      </article>
+
+      <article class="dashboard-panel dashboard-panel--compact">
+        <header>
+          <h2>Strength overview</h2>
+        </header>
+
+        @if (hasManagerDashboardData) {
+          <div class="dashboard-snapshot">
+            <strong>{{ strengthRiskGroups }}</strong>
+            <span>role group{{ strengthRiskGroups === 1 ? '' : 's' }} below target</span>
+          </div>
+        } @else {
+          <p class="dashboard-empty">No strength data to show.</p>
+        }
+      </article>
+    </section>
+
+    <section class="manager-dashboard-grid manager-dashboard-grid--wide-left">
+      <article class="dashboard-panel">
+        <header>
+          <h2>Shifts that need attention</h2>
+          <a routerLink="/schedule">Open board</a>
+        </header>
+
+        <div class="attention-list">
+          @for (shift of shiftsNeedingAttention; track shift.shiftId) {
+            <article>
+              <div>
+                <strong>{{ shift.label }}</strong>
+                <span>
+                  @if (shift.unfilledSlots > 0) {
+                    {{ shift.unfilledSlots }} missing assignment{{ shift.unfilledSlots === 1 ? '' : 's' }}
+                  }
+                  @if (shift.unfilledSlots > 0 && shift.strengthGap > 0) {
+                    -
+                  }
+                  @if (shift.strengthGap > 0) {
+                    Strength gap {{ shift.strengthGap }}
+                  }
+                </span>
+              </div>
+              <small>{{ shift.assignedWaiters }}/{{ shift.requiredWaiters }} waiters, strength {{ shift.assignedStrength }}/{{ shift.requiredStrength }}</small>
+            </article>
+          } @empty {
+            <p class="dashboard-empty">No problematic shifts for this week.</p>
+          }
+        </div>
+      </article>
+
+      <article class="dashboard-panel">
+        <header>
+          <h2>Employee workload</h2>
+        </header>
+
+        <div class="workload-table">
+          <div class="workload-table__header">
+            <span>Employee</span>
+            <span>Role</span>
+            <span>Assigned</span>
+            <span>Target</span>
+            <span>Available</span>
+          </div>
+          @for (employee of employeeWorkloadMetrics; track employee.employeeId) {
+            <div>
+              <strong>{{ employee.fullName }}</strong>
+              <span>{{ employee.roleLabel }}</span>
+              <span>{{ employee.assigned }}</span>
+              <span>{{ employee.target }}</span>
+              <span>{{ employee.requested }}</span>
+            </div>
+          } @empty {
+            <p class="dashboard-empty">No workload data for this week.</p>
+          }
+        </div>
+      </article>
     </section>
   } @else if (isShiftLeader()) {
     <section class="metric-grid">

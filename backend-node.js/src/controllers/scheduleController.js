@@ -47,10 +47,12 @@ async function saveAssignments(req, res, next) {
 
 async function validateSchedule(req, res, next) {
   try {
-    const { weekStartDate } = req.body || {};
+    const { weekStartDate, assignments, hasUnsavedChanges } = req.body || {};
     const validationResult = await scheduleService.validateSchedule(
       req.params.scheduleId,
       weekStartDate,
+      assignments,
+      Boolean(hasUnsavedChanges),
       req.user
     );
 
@@ -128,6 +130,20 @@ async function updateShiftRequirements(req, res, next) {
   }
 }
 
+async function finishShift(req, res, next) {
+  try {
+    const result = await scheduleService.finishShift(
+      req.params.shiftId,
+      req.body || {},
+      req.user
+    );
+
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getSchedule,
   generateSchedule,
@@ -138,4 +154,5 @@ module.exports = {
   unpublishSchedule,
   updateShiftRequiredStrength,
   updateShiftRequirements,
+  finishShift,
 };

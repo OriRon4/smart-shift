@@ -32,6 +32,7 @@ export interface ScheduleShift {
   shiftId: number;
   shiftType: ScheduleShiftType;
   requiredStrengthScore?: number;
+  hasPerformanceFeedback?: boolean;
   roleGroups: ScheduleRoleGroup[];
 }
 
@@ -55,6 +56,7 @@ export interface ScheduleWorker {
   strengthScore?: number;
   assignedShiftCount?: number;
   requestedShiftCount?: number;
+  targetShiftCount?: number;
 }
 
 export interface SaveScheduleAssignment {
@@ -69,6 +71,23 @@ export interface ShiftRequirementsUpdate {
   requiredBartenders: number;
   requiredShiftLeaders: number;
   requiredStrengthScore: number;
+}
+
+export type FinishShiftCustomerLoad = 'low' | 'normal' | 'high' | 'extreme';
+export type FinishShiftWaiterSuitability =
+  | 'needs_more_waiters'
+  | 'suitable'
+  | 'too_many_waiters';
+export type FinishShiftTeamPerformance =
+  | 'weak'
+  | 'reasonable'
+  | 'good'
+  | 'excellent';
+
+export interface FinishShiftFeedback {
+  actualCustomerLoad: FinishShiftCustomerLoad;
+  waiterSuitability: FinishShiftWaiterSuitability;
+  teamPerformance: FinishShiftTeamPerformance;
 }
 
 export interface ShiftMlPrediction {
@@ -92,16 +111,93 @@ export interface MlPredictionsResponse {
 
 export interface ScheduleValidationResponse {
   message: string;
-  warnings: ScheduleWarning[];
-  summary: ScheduleSummary;
+  status: ScheduleValidationStatus;
+  recommendation: string;
+  summary: ScheduleValidationSummary;
+  coverageIssues: ScheduleCoverageIssue[];
+  strengthIssues: ScheduleStrengthIssue[];
+  availabilityIssues: ScheduleAssignmentIssue[];
+  invalidAssignments: ScheduleAssignmentIssue[];
+  fairnessWarnings: ScheduleFairnessWarning[];
+  warnings: ScheduleValidationIssue[];
+  legacySummary?: ScheduleSummary;
 }
 
-export interface ScheduleWarning {
-  shiftId: number;
-  jobRole: JobRole;
-  uncoveredSlots: number;
-  meetsStrengthTarget: boolean;
+export type ScheduleValidationStatus = 'ready_to_save' | 'ready_with_warnings' | 'needs_fixes';
+export type ScheduleIssueSeverity = 'error' | 'warning';
+
+export interface ScheduleValidationSummary extends ScheduleSummary {
+  totalAssignments: number;
+  assignedShifts: number;
+  shiftsWithCoverageIssues: number;
+  shiftsWithStrengthIssues: number;
+  belowStrengthRoleGroups: number;
+  uniqueAssignedEmployees: number;
+  unsavedChanges: number;
 }
+
+export interface ScheduleCoverageIssue {
+  severity: ScheduleIssueSeverity;
+  type: string;
+  shiftId: number;
+  date?: string;
+  dayName?: string;
+  shiftType?: ScheduleShiftType;
+  jobRole: JobRole;
+  roleLabel?: string;
+  requiredCount: number;
+  assignedCount: number;
+  missingCount: number;
+  message: string;
+}
+
+export interface ScheduleStrengthIssue {
+  severity: ScheduleIssueSeverity;
+  type: string;
+  shiftId: number;
+  date?: string;
+  dayName?: string;
+  shiftType?: ScheduleShiftType;
+  jobRole: JobRole;
+  roleLabel?: string;
+  requiredStrengthScore: number;
+  assignedStrengthScore: number;
+  deficit: number;
+  message: string;
+}
+
+export interface ScheduleAssignmentIssue {
+  severity: ScheduleIssueSeverity;
+  type: string;
+  shiftId: number;
+  date?: string;
+  dayName?: string;
+  shiftType?: ScheduleShiftType;
+  employeeId: number;
+  employeeName: string;
+  jobRole: JobRole;
+  roleLabel?: string;
+  actualRole?: string;
+  message: string;
+}
+
+export interface ScheduleFairnessWarning {
+  severity: ScheduleIssueSeverity;
+  type: string;
+  employeeId: number;
+  employeeName: string;
+  requestedShifts: number;
+  assignedShifts: number;
+  targetShifts: number;
+  gap: number;
+  message: string;
+}
+
+export type ScheduleValidationIssue =
+  | ScheduleCoverageIssue
+  | ScheduleStrengthIssue
+  | ScheduleAssignmentIssue
+  | ScheduleFairnessWarning;
 
 export interface ScheduleImprovementSummary {
   iterationsRun: number;

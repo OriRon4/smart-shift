@@ -14,6 +14,7 @@ router.get("/", scheduleController.getSchedule);
 router.post("/generate", requireManager, scheduleController.generateSchedule);
 router.patch("/shifts/:shiftId/required-strength", requireManager, scheduleController.updateShiftRequiredStrength);
 router.patch("/shifts/:shiftId/requirements", requireManager, scheduleController.updateShiftRequirements);
+router.post("/shifts/:shiftId/finish", requireManagerOrShiftLeader, scheduleController.finishShift);
 router.patch("/:scheduleId/assignments", requireManagerOrShiftLeader, scheduleController.saveAssignments);
 router.delete("/:scheduleId/assignments", requireManager, scheduleController.clearScheduleAssignments);
 router.post("/:scheduleId/publish", requireManager, scheduleController.publishSchedule);

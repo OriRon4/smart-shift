@@ -13,7 +13,7 @@
   top: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   height: 100vh;
   padding: 16px;
   background: #102133;
@@ -23,7 +23,7 @@
 .app-shell__brand {
   display: grid;
   gap: 5px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   padding-bottom: 14px;
 }
 
@@ -40,7 +40,7 @@
 
 .app-shell__nav {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .app-shell__nav-link {
@@ -48,14 +48,14 @@
   align-items: center;
   min-height: 39px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 10px;
   color: #dbe7f3;
   padding: 0 11px;
   text-decoration: none;
 }
 
 .app-shell__nav-link:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .app-shell__nav-link--active {
@@ -71,7 +71,7 @@
   margin-top: auto;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.055);
   padding: 12px;
 }
 
@@ -90,7 +90,7 @@
   min-height: 0;
   height: 100vh;
   overflow: auto;
-  padding: clamp(18px, 3vw, 34px);
+  padding: clamp(14px, 2.2vw, 26px);
 }
 
 @media (max-width: 840px) {

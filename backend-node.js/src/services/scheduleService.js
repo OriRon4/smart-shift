@@ -1,4 +1,5 @@
 const scheduleRepository = require("../repositories/scheduleRepository");
+const mlRepository = require("../repositories/mlRepository");
 const {
   buildRoleValidationSummaries,
   calculateStrengthScore,
@@ -9,6 +10,8 @@ const {
 } = require("../formatters/scheduleBoardFormatter");
 const { PERMISSION_ROLES, SCHEDULE_JOB_ROLES } = require("../constants/roles");
 const { createHttpError } = require("../utils/errors");
+
+const STRENGTH_WARNING_THRESHOLD = 1;
 
 function roundScore(value) {
   return Number(Number(value || 0).toFixed(2));
@@ -69,6 +72,20 @@ function getSundayForDate(value) {
   return formatDateKey(date);
 }
 
+function formatDayName(dateKey) {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+  }).format(new Date(`${dateKey}T00:00:00`));
+}
+
+function getDayOfWeek(dateKey) {
+  return new Date(`${dateKey}T00:00:00`).getDay();
+}
+
+function isWeekend(dayOfWeek) {
+  return dayOfWeek === 5 || dayOfWeek === 6;
+}
+
 async function resolveScheduleWeek(scheduleId, weekStartDate) {
   const numericScheduleId = parseScheduleId(scheduleId);
   const persistedSchedule = await scheduleRepository.getPersistedScheduleById(
@@ -106,15 +123,32 @@ async function getScheduleForWeek(weekStartDate, user) {
   );
 
   if (!persistedSchedule) {
-    return {
-      scheduleId: null,
-      weekStartDate: scheduleInputs.weekStartDate,
-      weekEndDate: scheduleInputs.weekEndDate,
+    if (user.permissionRole !== PERMISSION_ROLES.MANAGER) {
+      return {
+        scheduleId: null,
+        weekStartDate: scheduleInputs.weekStartDate,
+        weekEndDate: scheduleInputs.weekEndDate,
+        publishedAt: null,
+        days: [],
+        canEdit: false,
+        canManage: false,
+      };
+    }
+
+    const emptySchedule =
+      await scheduleRepository.ensureWeeklyScheduleByWeekStartDate(
+        scheduleInputs.weekStartDate
+      );
+    const emptyAlgorithmResult = buildAlgorithmResultFromAssignments(
+      scheduleInputs,
+      []
+    );
+
+    return buildScheduleBoardResponse(scheduleInputs, emptyAlgorithmResult, {
+      scheduleId: emptySchedule.scheduleId,
       publishedAt: null,
-      days: [],
-      canEdit: false,
-      canManage: user.permissionRole === PERMISSION_ROLES.MANAGER,
-    };
+      permissionRole: user.permissionRole,
+    });
   }
 
   if (!persistedSchedule.publishedAt && !canViewUnpublishedSchedule(user)) {
@@ -167,8 +201,10 @@ async function generateScheduleForWeek(weekStartDate, user) {
   };
 }
 
-function validateAssignmentPayload(assignments) {
-  if (!Array.isArray(assignments) || !assignments.length) {
+function validateAssignmentPayload(assignments, options = {}) {
+  const requireNonEmpty = options.requireNonEmpty !== false;
+
+  if (!Array.isArray(assignments) || (requireNonEmpty && !assignments.length)) {
     throw createHttpError(400, "assignments must be a non-empty array");
   }
 
@@ -239,16 +275,12 @@ function buildManualAssignmentWarnings(scheduleInputs, assignments) {
       employee,
     ])
   );
-  const shiftById = new Map(
-    scheduleInputs.shifts.map((shift) => [shift.id, shift])
-  );
   const requestedShiftByEmployee = new Set(
     scheduleInputs.shiftRequests.map(
       (shiftRequest) => `${shiftRequest.employee_id}:${shiftRequest.shift_id}`
     )
   );
   const assignmentCountByShiftAndEmployee = new Map();
-  const assignmentCountByEmployeeAndDate = new Map();
 
   for (const assignment of assignments) {
     const shiftEmployeeKey = `${assignment.shiftId}:${assignment.employeeId}`;
@@ -256,24 +288,11 @@ function buildManualAssignmentWarnings(scheduleInputs, assignments) {
       shiftEmployeeKey,
       (assignmentCountByShiftAndEmployee.get(shiftEmployeeKey) || 0) + 1
     );
-
-    const shift = shiftById.get(assignment.shiftId);
-
-    if (shift) {
-      const employeeDateKey = `${assignment.employeeId}:${formatDateKey(
-        shift.shift_date
-      )}`;
-      assignmentCountByEmployeeAndDate.set(
-        employeeDateKey,
-        (assignmentCountByEmployeeAndDate.get(employeeDateKey) || 0) + 1
-      );
-    }
   }
 
   return assignments.flatMap((assignment) => {
     const warnings = [];
     const employee = employeesById.get(assignment.employeeId);
-    const shift = shiftById.get(assignment.shiftId);
 
     if (!employee) {
       return warnings;
@@ -328,24 +347,253 @@ function buildManualAssignmentWarnings(scheduleInputs, assignments) {
       });
     }
 
-    if (
-      shift &&
-      (assignmentCountByEmployeeAndDate.get(
-        `${assignment.employeeId}:${formatDateKey(shift.shift_date)}`
-      ) || 0) > 1
-    ) {
-      warnings.push({
-        type: "employee_scheduled_multiple_shifts_same_day",
-        shiftId: assignment.shiftId,
-        employeeId: assignment.employeeId,
-        jobRole: assignment.jobRole,
-        date: formatDateKey(shift.shift_date),
-        message: "Employee is scheduled more than once on the same day",
-      });
-    }
-
     return warnings;
   });
+}
+
+function buildValidationLookups(scheduleInputs) {
+  const shiftById = new Map(
+    scheduleInputs.shifts.map((shift) => [shift.id, shift])
+  );
+  const employeeById = new Map(
+    (scheduleInputs.allEmployees || scheduleInputs.employees).map((employee) => [
+      employee.id,
+      employee,
+    ])
+  );
+  const roleLabelByJobRole = new Map(
+    SCHEDULE_JOB_ROLES.map((roleConfig) => [
+      roleConfig.jobRole,
+      roleConfig.label,
+    ])
+  );
+
+  return {
+    shiftById,
+    employeeById,
+    roleLabelByJobRole,
+  };
+}
+
+function buildShiftLabel(shift) {
+  const date = formatDateKey(shift.shift_date);
+
+  return {
+    date,
+    dayName: formatDayName(date),
+    shiftType: shift.shift_type,
+  };
+}
+
+function buildCoverageIssues(scheduleInputs, validationSummaries) {
+  const { shiftById, roleLabelByJobRole } = buildValidationLookups(scheduleInputs);
+
+  return validationSummaries
+    .filter((summary) => summary.uncoveredSlots > 0)
+    .map((summary) => {
+      const shift = shiftById.get(summary.shiftId);
+
+      return {
+        severity: "error",
+        type: "coverage_gap",
+        shiftId: summary.shiftId,
+        ...(shift ? buildShiftLabel(shift) : {}),
+        jobRole: summary.jobRole,
+        roleLabel: roleLabelByJobRole.get(summary.jobRole) || summary.jobRole,
+        requiredCount: Number(summary.requiredCount),
+        assignedCount: Number(summary.assignedCount),
+        missingCount: Number(summary.uncoveredSlots),
+        message: "Required role slots are not fully assigned",
+      };
+    });
+}
+
+function buildStrengthIssues(scheduleInputs, validationSummaries) {
+  const { shiftById, roleLabelByJobRole } = buildValidationLookups(scheduleInputs);
+
+  return validationSummaries
+    .filter(
+      (summary) =>
+        roundScore(
+          Number(summary.requiredStrengthScore) -
+            Number(summary.assignedStrengthScore)
+        ) >= STRENGTH_WARNING_THRESHOLD
+    )
+    .map((summary) => {
+      const shift = shiftById.get(summary.shiftId);
+      const assignedStrengthScore = roundScore(summary.assignedStrengthScore);
+      const requiredStrengthScore = roundScore(summary.requiredStrengthScore);
+
+      return {
+        severity: "warning",
+        type: "below_strength_target",
+        shiftId: summary.shiftId,
+        ...(shift ? buildShiftLabel(shift) : {}),
+        jobRole: summary.jobRole,
+        roleLabel: roleLabelByJobRole.get(summary.jobRole) || summary.jobRole,
+        requiredStrengthScore,
+        assignedStrengthScore,
+        deficit: roundScore(
+          Math.max(0, requiredStrengthScore - assignedStrengthScore)
+        ),
+        message: "Assigned employee strength is below the target",
+      };
+    });
+}
+
+function enrichManualAssignmentIssue(scheduleInputs, warning) {
+  const { shiftById, employeeById, roleLabelByJobRole } =
+    buildValidationLookups(scheduleInputs);
+  const shift = shiftById.get(warning.shiftId);
+  const employee = employeeById.get(warning.employeeId);
+
+  return {
+    severity:
+      warning.type === "employee_not_available"
+        ? "warning"
+        : "error",
+    type: warning.type,
+    shiftId: warning.shiftId,
+    ...(shift ? buildShiftLabel(shift) : {}),
+    employeeId: warning.employeeId,
+    employeeName: employee?.full_name || `Employee #${warning.employeeId}`,
+    jobRole: warning.jobRole,
+    roleLabel: roleLabelByJobRole.get(warning.jobRole) || warning.jobRole,
+    actualRole: warning.actualRole,
+    message: warning.message,
+  };
+}
+
+function isSameDayDoubleAssignmentIssue(issue) {
+  const message = String(issue.message || "").toLowerCase();
+
+  return (
+    issue.type === "same_day_double_shift" ||
+    issue.type === "employee_scheduled_multiple_shifts_same_day" ||
+    (message.includes("more than once") && message.includes("same day"))
+  );
+}
+
+function buildFairnessWarnings(scheduleInputs, assignments) {
+  const assignedCountsByEmployee = new Map();
+  const requestedCountsByEmployee = new Map();
+
+  for (const assignment of assignments) {
+    assignedCountsByEmployee.set(
+      assignment.employeeId,
+      (assignedCountsByEmployee.get(assignment.employeeId) || 0) + 1
+    );
+  }
+
+  for (const shiftRequest of scheduleInputs.shiftRequests) {
+    requestedCountsByEmployee.set(
+      shiftRequest.employee_id,
+      (requestedCountsByEmployee.get(shiftRequest.employee_id) || 0) + 1
+    );
+  }
+
+  return scheduleInputs.employees
+    .map((employee) => {
+      const requestedShifts = requestedCountsByEmployee.get(employee.id) || 0;
+      const assignedShifts = assignedCountsByEmployee.get(employee.id) || 0;
+      const strengthScore = calculateStrengthScore(employee);
+      const normalizedStrength = strengthScore / 10;
+      const targetShifts = requestedShifts * (0.55 + 0.45 * normalizedStrength);
+      const gap = Math.max(0, targetShifts - assignedShifts);
+
+      return {
+        severity: "warning",
+        type: "employee_under_target",
+        employeeId: employee.id,
+        employeeName: employee.full_name,
+        requestedShifts,
+        assignedShifts,
+        targetShifts: roundScore(targetShifts),
+        gap: roundScore(gap),
+        message: "Employee is assigned below the target based on availability",
+      };
+    })
+    .filter((warning) => warning.requestedShifts > 0 && warning.gap > 0.5);
+}
+
+function buildValidationSummary(
+  scheduleInputs,
+  assignments,
+  validationSummaries,
+  hasUnsavedChanges
+) {
+  const significantStrengthSummaries = validationSummaries.filter(
+    (summary) =>
+      roundScore(
+        Number(summary.requiredStrengthScore) -
+          Number(summary.assignedStrengthScore)
+      ) >= STRENGTH_WARNING_THRESHOLD
+  );
+  const assignedShiftIds = new Set(assignments.map((assignment) => assignment.shiftId));
+  const shiftsWithCoverageIssues = new Set(
+    validationSummaries
+      .filter((summary) => summary.uncoveredSlots > 0)
+      .map((summary) => summary.shiftId)
+  );
+  const shiftsWithStrengthIssues = new Set(
+    significantStrengthSummaries.map((summary) => summary.shiftId)
+  );
+  const uniqueAssignedEmployees = new Set(
+    assignments.map((assignment) => assignment.employeeId)
+  );
+
+  return {
+    totalShifts: scheduleInputs.shifts.length,
+    totalRoleRequirements: validationSummaries.reduce(
+      (total, summary) => total + Number(summary.requiredCount),
+      0
+    ),
+    totalAssignments: assignments.length,
+    assignedShifts: assignedShiftIds.size,
+    fullyCoveredRoleGroups: validationSummaries.filter(
+      (summary) => summary.uncoveredSlots === 0
+    ).length,
+    underCoveredRoleGroups: validationSummaries.filter(
+      (summary) => summary.uncoveredSlots > 0
+    ).length,
+    shiftsWithCoverageIssues: shiftsWithCoverageIssues.size,
+    shiftsWithStrengthIssues: shiftsWithStrengthIssues.size,
+    belowStrengthRoleGroups: significantStrengthSummaries.length,
+    belowStrengthTargetRoleGroups: significantStrengthSummaries.length,
+    meetsStrengthTargetRoleGroups: validationSummaries.filter(
+      (summary) => summary.meetsStrengthTarget
+    ).length,
+    uniqueAssignedEmployees: uniqueAssignedEmployees.size,
+    unsavedChanges: hasUnsavedChanges ? 1 : 0,
+  };
+}
+
+function resolveValidationStatus(report) {
+  const hasBlockingInvalidAssignments = report.invalidAssignments.some(
+    (issue) => issue.severity === "error"
+  );
+
+  if (report.coverageIssues.length || hasBlockingInvalidAssignments) {
+    return {
+      status: "needs_fixes",
+      recommendation: "Fix blocking issues before saving the schedule.",
+    };
+  }
+
+  if (
+    report.strengthIssues.length ||
+    report.fairnessWarnings.length
+  ) {
+    return {
+      status: "ready_with_warnings",
+      recommendation: "You can save, but review the warnings first.",
+    };
+  }
+
+  return {
+    status: "ready_to_save",
+    recommendation: "The schedule is ready to save.",
+  };
 }
 
 async function saveScheduleAssignments(
@@ -423,7 +671,13 @@ async function saveScheduleAssignments(
   };
 }
 
-async function validateSchedule(scheduleId, weekStartDate, user) {
+async function validateSchedule(
+  scheduleId,
+  weekStartDate,
+  assignmentsBody,
+  hasUnsavedChanges,
+  user
+) {
   const persistedScheduleForWeek = await resolveScheduleWeek(
     scheduleId,
     weekStartDate
@@ -439,34 +693,68 @@ async function validateSchedule(scheduleId, weekStartDate, user) {
     throw createHttpError(404, "No saved schedule exists for this week");
   }
 
+  const assignments = Array.isArray(assignmentsBody)
+    ? validateAssignmentPayload(assignmentsBody, { requireNonEmpty: false })
+    : persistedSchedule.assignments;
+
+  ensureAssignmentsMatchWeekAndRoles(scheduleInputs, assignments);
+
   const algorithmResult = buildAlgorithmResultFromAssignments(
     scheduleInputs,
-    persistedSchedule.assignments
+    assignments
   );
   const board = buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
     scheduleId: persistedSchedule.scheduleId,
     publishedAt: persistedSchedule.publishedAt,
     permissionRole: user.permissionRole,
   });
-  const warnings = algorithmResult.shiftValidationSummaries
-    .filter((summary) => summary.uncoveredSlots > 0 || !summary.meetsStrengthTarget)
-    .map((summary) => ({
-      shiftId: summary.shiftId,
-      jobRole: summary.jobRole,
-      uncoveredSlots: summary.uncoveredSlots,
-      meetsStrengthTarget: summary.meetsStrengthTarget,
-    }))
-    .concat(
-      buildManualAssignmentWarnings(
-        scheduleInputs,
-        persistedSchedule.assignments
-      )
-    );
+  const manualWarnings = buildManualAssignmentWarnings(scheduleInputs, assignments);
+  const coverageIssues = buildCoverageIssues(
+    scheduleInputs,
+    algorithmResult.shiftValidationSummaries
+  );
+  const strengthIssues = buildStrengthIssues(
+    scheduleInputs,
+    algorithmResult.shiftValidationSummaries
+  );
+  const enrichedManualIssues = manualWarnings
+    .map((warning) => enrichManualAssignmentIssue(scheduleInputs, warning))
+    .filter((issue) => !isSameDayDoubleAssignmentIssue(issue));
+  const availabilityIssues = enrichedManualIssues.filter(
+    (issue) => issue.type === "employee_not_available"
+  );
+  const invalidAssignments = enrichedManualIssues.filter(
+    (issue) => issue.type !== "employee_not_available"
+  );
+  const fairnessWarnings = buildFairnessWarnings(scheduleInputs, assignments);
+  const report = {
+    message: "Schedule validation completed",
+    summary: buildValidationSummary(
+      scheduleInputs,
+      assignments,
+      algorithmResult.shiftValidationSummaries,
+      hasUnsavedChanges
+    ),
+    coverageIssues,
+    strengthIssues,
+    availabilityIssues,
+    invalidAssignments,
+    fairnessWarnings,
+    warnings: [
+      ...coverageIssues,
+      ...strengthIssues,
+      ...availabilityIssues,
+      ...invalidAssignments,
+      ...fairnessWarnings,
+    ],
+  };
+  const statusResult = resolveValidationStatus(report);
 
   return {
-    message: "Schedule validation completed",
-    warnings,
-    summary: board.summary,
+    ...report,
+    status: statusResult.status,
+    recommendation: statusResult.recommendation,
+    legacySummary: board.summary,
   };
 }
 
@@ -628,6 +916,77 @@ function normalizeShiftRequirements(body) {
   };
 }
 
+const CUSTOMER_LOAD_SCORES = {
+  low: 3,
+  normal: 5,
+  high: 8,
+  extreme: 10,
+};
+
+const WAITER_SUITABILITY_VALUES = new Set([
+  "needs_more_waiters",
+  "suitable",
+  "too_many_waiters",
+]);
+
+const TEAM_PERFORMANCE_SCORES = {
+  weak: 4,
+  reasonable: 6,
+  good: 8,
+  excellent: 10,
+};
+
+function normalizeFinishShiftFeedback(body) {
+  const actualCustomerLoad = String(body.actualCustomerLoad || "").trim();
+  const waiterSuitability = String(body.waiterSuitability || "").trim();
+  const teamPerformance = String(body.teamPerformance || "").trim();
+
+  if (!Object.prototype.hasOwnProperty.call(CUSTOMER_LOAD_SCORES, actualCustomerLoad)) {
+    throw createHttpError(400, "actualCustomerLoad is invalid");
+  }
+
+  if (!WAITER_SUITABILITY_VALUES.has(waiterSuitability)) {
+    throw createHttpError(400, "waiterSuitability is invalid");
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(TEAM_PERFORMANCE_SCORES, teamPerformance)) {
+    throw createHttpError(400, "teamPerformance is invalid");
+  }
+
+  return {
+    actualCustomerLoad,
+    waiterSuitability,
+    teamPerformance,
+    expectedCustomerLoad: CUSTOMER_LOAD_SCORES[actualCustomerLoad],
+    managerRating: TEAM_PERFORMANCE_SCORES[teamPerformance],
+  };
+}
+
+function calculateFeedbackWaiterCount(waiterAssignmentCount, waiterSuitability) {
+  if (waiterSuitability === "needs_more_waiters") {
+    return waiterAssignmentCount + 1;
+  }
+
+  if (waiterSuitability === "too_many_waiters") {
+    return Math.max(1, waiterAssignmentCount - 1);
+  }
+
+  return waiterAssignmentCount;
+}
+
+function calculateAssignedWaiterStrength(assignments, employees) {
+  const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
+
+  return roundScore(
+    assignments
+      .filter((assignment) => assignment.jobRole === "waiter")
+      .reduce((total, assignment) => {
+        const employee = employeeById.get(assignment.employeeId);
+        return total + (employee ? calculateStrengthScore(employee) : 0);
+      }, 0)
+  );
+}
+
 async function updateShiftRequirements(shiftId, body, user) {
   const numericShiftId = Number(shiftId);
 
@@ -676,6 +1035,101 @@ async function updateShiftRequirements(shiftId, body, user) {
   };
 }
 
+async function finishShift(shiftId, body, user) {
+  const numericShiftId = Number(shiftId);
+
+  if (!Number.isInteger(numericShiftId) || numericShiftId <= 0) {
+    throw createHttpError(400, "shiftId must be a positive integer");
+  }
+
+  if (
+    user.permissionRole !== PERMISSION_ROLES.MANAGER &&
+    user.permissionRole !== PERMISSION_ROLES.SHIFT_LEADER
+  ) {
+    throw createHttpError(403, "Manager or shift manager permission is required");
+  }
+
+  const feedback = normalizeFinishShiftFeedback(body);
+  const shift = await scheduleRepository.getShiftById(numericShiftId);
+
+  if (!shift) {
+    throw createHttpError(404, "Shift not found");
+  }
+
+  const existingFeedback = await mlRepository.getPerformanceLogByShift(shift);
+
+  if (existingFeedback) {
+    throw createHttpError(409, "Shift feedback was already submitted");
+  }
+
+  const weekStartDate = getSundayForDate(shift.shift_date);
+  const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
+    weekStartDate
+  );
+  const persistedSchedule = await scheduleRepository.getPersistedScheduleByWeek(
+    weekStartDate
+  );
+
+  if (!persistedSchedule) {
+    throw createHttpError(400, "A saved schedule is required before finishing a shift");
+  }
+
+  const shiftAssignments = persistedSchedule.assignments.filter(
+    (assignment) => assignment.shiftId === numericShiftId
+  );
+  const assignedWaiterCount = shiftAssignments.filter(
+    (assignment) => assignment.jobRole === "waiter"
+  ).length;
+  const actualWaitersCount = calculateFeedbackWaiterCount(
+    assignedWaiterCount,
+    feedback.waiterSuitability
+  );
+  const actualStrengthScore = calculateAssignedWaiterStrength(
+    shiftAssignments,
+    scheduleInputs.allEmployees || scheduleInputs.employees
+  );
+  const shiftDate = formatDateKey(shift.shift_date);
+  const dayOfWeek = getDayOfWeek(shiftDate);
+
+  await mlRepository.saveShiftPerformanceLog({
+    shiftDate,
+    shiftType: shift.shift_type,
+    dayOfWeek,
+    isWeekend: isWeekend(dayOfWeek),
+    expectedCustomerLoad: feedback.expectedCustomerLoad,
+    actualWaitersCount,
+    actualStrengthScore,
+    managerRating: feedback.managerRating,
+  });
+
+  const refreshedScheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
+    weekStartDate
+  );
+  const algorithmResult = buildAlgorithmResultFromAssignments(
+    refreshedScheduleInputs,
+    persistedSchedule.assignments
+  );
+
+  return {
+    message: "Shift feedback saved successfully",
+    feedback: {
+      shiftId: numericShiftId,
+      actualCustomerLoad: feedback.actualCustomerLoad,
+      waiterSuitability: feedback.waiterSuitability,
+      teamPerformance: feedback.teamPerformance,
+      expectedCustomerLoad: feedback.expectedCustomerLoad,
+      actualWaitersCount,
+      actualStrengthScore,
+      managerRating: feedback.managerRating,
+    },
+    ...buildScheduleBoardResponse(refreshedScheduleInputs, algorithmResult, {
+      scheduleId: persistedSchedule.scheduleId,
+      publishedAt: persistedSchedule.publishedAt,
+      permissionRole: user.permissionRole,
+    }),
+  };
+}
+
 module.exports = {
   getScheduleForWeek,
   generateScheduleForWeek,
@@ -686,5 +1140,6 @@ module.exports = {
   unpublishSchedule,
   updateShiftRequiredStrength,
   updateShiftRequirements,
+  finishShift,
   buildPersistedAssignments,
 };

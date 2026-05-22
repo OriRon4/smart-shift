@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 
 import { environment } from '../../../../environments/environment';
 import {
+  FinishShiftFeedback,
   SaveScheduleAssignment,
   ScheduleBoardResponse,
   ScheduleValidationResponse,
@@ -47,12 +48,16 @@ export class ScheduleApiService {
 
   validateSchedule(
     scheduleId: number,
-    weekStartDate: string
+    weekStartDate: string,
+    assignments?: SaveScheduleAssignment[],
+    hasUnsavedChanges = false
   ): Observable<ScheduleValidationResponse> {
     return this.http.post<ScheduleValidationResponse>(
       `${this.apiUrl}/${scheduleId}/validate`,
       {
-        weekStartDate
+        weekStartDate,
+        assignments,
+        hasUnsavedChanges
       }
     );
   }
@@ -92,6 +97,16 @@ export class ScheduleApiService {
     return this.http.patch<ScheduleBoardResponse>(
       `${this.apiUrl}/shifts/${requirements.shiftId}/requirements`,
       requirements
+    );
+  }
+
+  finishShift(
+    shiftId: number,
+    feedback: FinishShiftFeedback
+  ): Observable<ScheduleBoardResponse> {
+    return this.http.post<ScheduleBoardResponse>(
+      `${this.apiUrl}/shifts/${shiftId}/finish`,
+      feedback
     );
   }
 }

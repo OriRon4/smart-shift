@@ -23,6 +23,12 @@ function roundScore(value) {
   return Number(Number(value || 0).toFixed(1));
 }
 
+function calculateTargetShiftCount(requestedShifts, strengthScore) {
+  return roundScore(
+    Number(requestedShifts || 0) * (0.55 + 0.45 * (Number(strengthScore || 0) / 10))
+  );
+}
+
 function buildCountMap(items, getKey) {
   const countByKey = new Map();
 
@@ -93,6 +99,10 @@ function buildAssignedWorkersForRole(
           assignedShiftCountByEmployee.get(employee.id) || 0;
         worker.requestedShiftCount =
           requestedShiftCountByEmployee.get(employee.id) || 0;
+        worker.targetShiftCount = calculateTargetShiftCount(
+          worker.requestedShiftCount,
+          worker.strengthScore
+        );
       }
 
       return worker;
@@ -145,6 +155,11 @@ function buildScheduleBoardResponse(
   const assignedShiftCountByEmployee = buildCountMap(
     algorithmResult.allAssignments,
     (assignment) => assignment.employeeId
+  );
+  const performanceLogKeys = new Set(
+    (scheduleInputs.performanceLogs || []).map(
+      (log) => `${log.shiftDate}:${log.shiftType}`
+    )
   );
 
   const days = buildWeekDateKeys(scheduleInputs.weekStartDate).map(
@@ -204,6 +219,9 @@ function buildScheduleBoardResponse(
             shiftId: shift.id,
             shiftType: shift.shift_type,
             requiredStrengthScore: roundScore(shift.required_strength_score),
+            hasPerformanceFeedback: performanceLogKeys.has(
+              `${formatDateKey(shift.shift_date)}:${shift.shift_type}`
+            ),
             roleGroups,
           };
         });

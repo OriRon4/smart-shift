@@ -25,15 +25,29 @@
                         <p>Strength {{ getShiftAssignedStrength(shift) }} / {{ shift.requiredStrengthScore }}</p>
                       </div>
 
-                      @if (canEditRequiredStrength) {
-                        <button
-                          type="button"
-                          class="shift-card__edit-action"
-                          aria-label="Edit shift requirements"
-                          (click)="openShiftRequirementEditor(shift)"
-                        >
-                          Edit
-                        </button>
+                      @if (canManage || canEditRequiredStrength) {
+                        <div class="shift-card__actions">
+                          @if (canManage) {
+                            <button
+                              type="button"
+                              class="shift-card__finish-action"
+                              [disabled]="shift.hasPerformanceFeedback"
+                              (click)="requestFinishShift(shift)"
+                            >
+                              {{ shift.hasPerformanceFeedback ? 'Finished' : 'Finish Shift' }}
+                            </button>
+                          }
+                          @if (canEditRequiredStrength) {
+                            <button
+                              type="button"
+                              class="shift-card__edit-action"
+                              aria-label="Edit shift requirements"
+                              (click)="openShiftRequirementEditor(shift)"
+                            >
+                              Edit
+                            </button>
+                          }
+                        </div>
                       }
                     </header>
 
@@ -149,7 +163,7 @@
                                     <span class="worker-row__metrics">
                                       Str {{ worker.strengthScore }}
                                       @if (worker.assignedShiftCount !== undefined && worker.requestedShiftCount !== undefined) {
-                                        - {{ worker.assignedShiftCount }}/{{ worker.requestedShiftCount }}
+                                        <span class="worker-row__ratio">{{ worker.assignedShiftCount }}/{{ worker.requestedShiftCount }}</span>
                                       }
                                     </span>
                                   }
@@ -169,6 +183,16 @@
                             <p class="worker-list__empty">No employees assigned.</p>
                           }
                         </div>
+
+                        @if (canManage && hasOpenSlot(roleGroup)) {
+                          <button
+                            type="button"
+                            class="role-group__add-worker"
+                            (click)="requestAddWorker(day, shift, roleGroup)"
+                          >
+                            Add worker
+                          </button>
+                        }
 
                         @if (roleGroup.assignedStrengthScore !== undefined) {
                           <footer class="role-group__footer">

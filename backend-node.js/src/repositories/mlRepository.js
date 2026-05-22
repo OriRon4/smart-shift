@@ -154,9 +154,64 @@ async function getPredictionByShiftId(shiftId) {
   };
 }
 
+async function getPerformanceLogByShift(shift) {
+  const [rows] = await pool.query(
+    `
+      SELECT
+        id,
+        shift_date,
+        shift_type,
+        expected_customer_load,
+        actual_waiters_count,
+        actual_strength_score,
+        manager_rating,
+        created_at
+      FROM shift_performance_logs
+      WHERE shift_date = ?
+        AND shift_type = ?
+      LIMIT 1
+    `,
+    [formatDateKey(shift.shift_date), shift.shift_type]
+  );
+
+  return rows[0] || null;
+}
+
+async function saveShiftPerformanceLog(log) {
+  const [result] = await pool.query(
+    `
+      INSERT INTO shift_performance_logs (
+        shift_date,
+        shift_type,
+        day_of_week,
+        is_weekend,
+        expected_customer_load,
+        actual_waiters_count,
+        actual_strength_score,
+        manager_rating
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      log.shiftDate,
+      log.shiftType,
+      log.dayOfWeek,
+      log.isWeekend,
+      log.expectedCustomerLoad,
+      log.actualWaitersCount,
+      log.actualStrengthScore,
+      log.managerRating,
+    ]
+  );
+
+  return result.insertId;
+}
+
 module.exports = {
   getPerformanceAverages,
   savePredictions,
   getPredictionsByWeek,
   getPredictionByShiftId,
+  getPerformanceLogByShift,
+  saveShiftPerformanceLog,
 };

@@ -33,10 +33,10 @@ export class MlRecommendationsApiService {
     );
   }
 
-  applyPrediction(shiftId: number): Observable<ScheduleBoardResponse> {
+  applyWeekPredictions(weekStartDate: string): Observable<ScheduleBoardResponse> {
     return this.http.post<ScheduleBoardResponse>(
-      `${this.apiUrl}/predictions/${shiftId}/apply`,
-      {}
+      `${this.apiUrl}/predictions/apply-week`,
+      { weekStartDate }
     );
   }
 }

@@ -4,7 +4,7 @@
       <div>
         <span class="schedule-hero__eyebrow">Weekly operations</span>
         <h1>Schedule Board</h1>
-        <p>Review the week by day, shift, and role. Managers can generate, validate, save, and replace assignments.</p>
+        <p>Plan, review, and save the weekly schedule.</p>
       </div>
 
       <app-week-selector
@@ -35,8 +35,13 @@
             <button type="button" [disabled]="isLoading" (click)="generateMlRecommendations()">
               Generate ML Recommendations
             </button>
-            <button type="button" [disabled]="!board?.scheduleId || isLoading" (click)="validateSchedule()">
-              Validate schedule
+            <button
+              type="button"
+              class="schedule-board__check-action"
+              [disabled]="!board?.scheduleId || isLoading"
+              (click)="validateSchedule()"
+            >
+              Check Schedule
             </button>
             <button
               type="button"
@@ -57,9 +62,6 @@
             Save changes
             </button>
           }
-          @if (canManageSchedule()) {
-            <small class="schedule-board__publish-status">{{ publishedStatusLabel }}</small>
-          }
         </div>
       }
     </section>
@@ -77,7 +79,7 @@
     }
 
       @if (board?.summary && canManageSchedule()) {
-      <section class="schedule-board__summary-cards" aria-label="Schedule summary">
+      <section class="schedule-board__summary-cards schedule-board__summary-cards--compact" aria-label="Schedule summary">
         <button
           type="button"
           class="kpi-card"
@@ -86,16 +88,10 @@
           [class.kpi-card--active]="boardFilter === 'strength'"
           (click)="setBoardFilter('strength')"
         >
-          <span class="kpi-card__label">Below strength target</span>
+          <span class="kpi-card__label">Strength risks</span>
           <strong>{{ strengthRiskGroups }}</strong>
-          <small>{{ belowStrengthShiftCount }} shifts affected</small>
+          <small>{{ belowStrengthShiftCount }} shifts</small>
         </button>
-
-        <article class="kpi-card kpi-card--neutral">
-          <span class="kpi-card__label">Weakest shift</span>
-          <strong>{{ weakestShift?.label || 'None' }}</strong>
-          <small>{{ weakestShift?.helper || 'All shifts meet strength target' }}</small>
-        </article>
 
         <button
           type="button"
@@ -105,38 +101,10 @@
           [class.kpi-card--active]="boardFilter === 'gaps'"
           (click)="setBoardFilter('gaps')"
         >
-          <span class="kpi-card__label">Shifts with gaps</span>
+          <span class="kpi-card__label">Coverage gaps</span>
           <strong>{{ gapRoleGroupCount }}</strong>
-          <small>{{ gapShiftCount }} shifts - {{ unfilledSlots }} missing assignments</small>
+          <small>{{ unfilledSlots }} missing</small>
         </button>
-
-        <div class="kpi-popover-shell">
-          <button
-            type="button"
-            class="kpi-card"
-            [class.kpi-card--warning]="employeesUnderTarget.length > 0"
-            [class.kpi-card--good]="employeesUnderTarget.length === 0"
-            (click)="toggleEmployeesUnderTarget()"
-          >
-            <span class="kpi-card__label">Employees under target</span>
-            <strong>{{ employeesUnderTarget.length }}</strong>
-            <small>assigned below target</small>
-          </button>
-
-          @if (showEmployeesUnderTarget) {
-            <section class="kpi-popover">
-              <p class="kpi-popover__hint">Assigned / Target</p>
-              @for (employee of employeesUnderTarget; track employee.employeeId) {
-                <div>
-                  <strong>{{ employee.fullName }}</strong>
-                  <span>{{ employee.assigned }} / {{ employee.target }}</span>
-                </div>
-              } @empty {
-                <p>No employees are significantly under target.</p>
-              }
-            </section>
-          }
-        </div>
       </section>
     }
 
@@ -145,9 +113,14 @@
       <aside class="replacement-drawer" aria-label="Replace worker">
         <header class="replacement-drawer__header">
           <div>
-            <span>Replace worker</span>
-            <h2>{{ pendingReplacement.dayName }} {{ pendingReplacement.shiftType }}</h2>
-            <p>Role: {{ pendingReplacement.roleLabel }} - Current: {{ pendingReplacement.employeeName }}</p>
+            <span>{{ pendingReplacement.mode === 'add' ? 'Add worker' : 'Replace worker' }}</span>
+            <h2>{{ pendingReplacement.mode === 'add' ? 'Add worker' : 'Replace worker' }}</h2>
+            <p>
+              {{ pendingReplacement.dayName }} {{ pendingReplacement.shiftType }} - {{ pendingReplacement.roleLabel }}
+              @if (pendingReplacement.employeeName) {
+                <span> - Current: {{ pendingReplacement.employeeName }}</span>
+              }
+            </p>
           </div>
           <button type="button" aria-label="Close replacement drawer" (click)="closeReplacementDrawer()">x</button>
         </header>
@@ -162,13 +135,8 @@
           />
         </label>
 
-        <div class="replacement-legend" aria-label="Replacement legend">
-          <span><i class="badge-dot badge-dot--available"></i> Available = submitted availability for this shift</span>
-          <span><i class="badge-dot badge-dot--scheduled"></i> Scheduled = already assigned / works same day</span>
-        </div>
-
         <div class="replacement-list">
-          @for (section of getReplacementSections(); track section.title) {
+          @for (section of getReplacementCandidateSections(); track section.title) {
             <section class="replacement-section">
               <h3>{{ section.title }}</h3>
               @for (employee of section.employees; track employee.id) {
@@ -176,28 +144,26 @@
                   <span class="replacement-row__avatar">{{ getEmployeeInitials(employee) }}</span>
                   <div class="replacement-row__main">
                     <strong>{{ employee.fullName }}</strong>
-                    <span>{{ formatEmployeeRole(employee) }} - {{ getEmployeeTargetRatio(employee) }}</span>
-                    <small>{{ getEmployeeStrengthLabel(employee) }} strength - {{ getReplacementCompatibilityLabel(employee) }}</small>
+                    <span>{{ formatEmployeeRole(employee) }} - Match {{ getReplacementMatchScore(employee) }}/10</span>
                     <div class="replacement-row__badges">
                       @if (isEmployeeAvailableForPendingShift(employee)) {
-                        <span class="replacement-badge replacement-badge--available">Available</span>
-                      } @else {
-                        <span class="replacement-badge replacement-badge--unavailable">Not available</span>
+                        <small class="replacement-badge replacement-badge--available">Available</small>
                       }
                       @if (isEmployeeScheduledForPendingShift(employee)) {
-                        <span class="replacement-badge replacement-badge--scheduled">Scheduled</span>
-                      } @else if (isEmployeeWorkingSameDay(employee)) {
-                        <span class="replacement-badge replacement-badge--same-day">Works same day</span>
+                        <small class="replacement-badge replacement-badge--scheduled">Scheduled</small>
                       }
-                      @if (isEmployeeRoleMismatchForPendingShift(employee)) {
-                        <span class="replacement-badge replacement-badge--role-mismatch">Role mismatch</span>
-                      }
-                      @if (employee.isActive === false) {
-                        <span class="replacement-badge replacement-badge--inactive">Inactive</span>
+                      @if (isEmployeeWorkingSameDay(employee)) {
+                        <small class="replacement-badge replacement-badge--today">Works today</small>
                       }
                     </div>
                   </div>
-                  <button type="button" (click)="applyReplacement(employee.id)">Replace</button>
+                  <button
+                    type="button"
+                    [disabled]="isEmployeeScheduledForPendingShift(employee)"
+                    (click)="applyReplacement(employee.id)"
+                  >
+                    {{ pendingReplacement.mode === 'add' ? 'Add' : 'Replace' }}
+                  </button>
                 </article>
               }
             </section>
@@ -208,10 +174,242 @@
       </aside>
     }
 
-    @if (validationResult && canManageSchedule()) {
-      <section class="schedule-board__notice">
-        <strong>{{ validationResult.message }}</strong>
-        <span>{{ validationResult.warnings.length }} warnings found.</span>
+    @if (isMlApplyDialogOpen && canManageSchedule()) {
+      <section role="dialog" aria-modal="true" aria-label="Apply ML recommendations">
+        <button
+          type="button"
+          class="replacement-backdrop"
+          aria-label="Keep current requirements"
+          (click)="keepCurrentRequirements()"
+        ></button>
+
+        <article class="replacement-drawer schedule-check-dialog schedule-confirm-dialog schedule-action-dialog">
+          <header class="replacement-drawer__header">
+            <div>
+              <span>ML recommendations</span>
+              <h2>Apply generated requirements?</h2>
+            </div>
+            <button type="button" aria-label="Close ML confirmation" (click)="keepCurrentRequirements()">x</button>
+          </header>
+
+          <p>Apply all ML recommendations to this week's shift requirements?</p>
+          <p class="schedule-action-dialog__hint">This will update required waiters and required strength for all shifts in the selected week.</p>
+
+          <div class="schedule-dialog-actions">
+            <button type="button" class="schedule-dialog-actions__secondary" (click)="keepCurrentRequirements()">
+              Keep current requirements
+            </button>
+            <button type="button" class="schedule-dialog-actions__primary" [disabled]="isLoading" (click)="applyAllMlRecommendations()">
+              Apply all recommendations
+            </button>
+          </div>
+        </article>
+      </section>
+    }
+
+    @if (pendingFinishShift) {
+      <section role="dialog" aria-modal="true" aria-label="Finish shift feedback">
+        <button
+          type="button"
+          class="replacement-backdrop"
+          aria-label="Close finish shift feedback"
+          (click)="closeFinishShiftDialog()"
+        ></button>
+
+        <article class="replacement-drawer schedule-check-dialog schedule-confirm-dialog schedule-action-dialog">
+          <header class="replacement-drawer__header">
+            <div>
+              <span>Finish shift</span>
+              <h2>{{ pendingFinishShift.dayName }} {{ formatShiftType(pendingFinishShift.shift) }}</h2>
+              <p>{{ pendingFinishShift.date }}</p>
+            </div>
+            <button type="button" aria-label="Close finish shift feedback" (click)="closeFinishShiftDialog()">x</button>
+          </header>
+
+          <section class="finish-feedback">
+            <fieldset>
+              <legend>What was the actual customer load?</legend>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.actualCustomerLoad === 'low'">
+                <input type="radio" name="actualCustomerLoad" [checked]="finishShiftFeedback.actualCustomerLoad === 'low'" (change)="updateFinishShiftFeedback('actualCustomerLoad', 'low')" />
+                Low
+              </label>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.actualCustomerLoad === 'normal'">
+                <input type="radio" name="actualCustomerLoad" [checked]="finishShiftFeedback.actualCustomerLoad === 'normal'" (change)="updateFinishShiftFeedback('actualCustomerLoad', 'normal')" />
+                Normal
+              </label>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.actualCustomerLoad === 'high'">
+                <input type="radio" name="actualCustomerLoad" [checked]="finishShiftFeedback.actualCustomerLoad === 'high'" (change)="updateFinishShiftFeedback('actualCustomerLoad', 'high')" />
+                High
+              </label>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.actualCustomerLoad === 'extreme'">
+                <input type="radio" name="actualCustomerLoad" [checked]="finishShiftFeedback.actualCustomerLoad === 'extreme'" (change)="updateFinishShiftFeedback('actualCustomerLoad', 'extreme')" />
+                Extreme
+              </label>
+            </fieldset>
+
+            <fieldset>
+              <legend>Was the number of waiters suitable?</legend>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.waiterSuitability === 'needs_more_waiters'">
+                <input type="radio" name="waiterSuitability" [checked]="finishShiftFeedback.waiterSuitability === 'needs_more_waiters'" (change)="updateFinishShiftFeedback('waiterSuitability', 'needs_more_waiters')" />
+                Too few
+              </label>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.waiterSuitability === 'suitable'">
+                <input type="radio" name="waiterSuitability" [checked]="finishShiftFeedback.waiterSuitability === 'suitable'" (change)="updateFinishShiftFeedback('waiterSuitability', 'suitable')" />
+                Suitable
+              </label>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.waiterSuitability === 'too_many_waiters'">
+                <input type="radio" name="waiterSuitability" [checked]="finishShiftFeedback.waiterSuitability === 'too_many_waiters'" (change)="updateFinishShiftFeedback('waiterSuitability', 'too_many_waiters')" />
+                Too many
+              </label>
+            </fieldset>
+
+            <fieldset>
+              <legend>How did the team perform?</legend>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.teamPerformance === 'weak'">
+                <input type="radio" name="teamPerformance" [checked]="finishShiftFeedback.teamPerformance === 'weak'" (change)="updateFinishShiftFeedback('teamPerformance', 'weak')" />
+                Weak
+              </label>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.teamPerformance === 'reasonable'">
+                <input type="radio" name="teamPerformance" [checked]="finishShiftFeedback.teamPerformance === 'reasonable'" (change)="updateFinishShiftFeedback('teamPerformance', 'reasonable')" />
+                Reasonable
+              </label>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.teamPerformance === 'good'">
+                <input type="radio" name="teamPerformance" [checked]="finishShiftFeedback.teamPerformance === 'good'" (change)="updateFinishShiftFeedback('teamPerformance', 'good')" />
+                Good
+              </label>
+              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.teamPerformance === 'excellent'">
+                <input type="radio" name="teamPerformance" [checked]="finishShiftFeedback.teamPerformance === 'excellent'" (change)="updateFinishShiftFeedback('teamPerformance', 'excellent')" />
+                Excellent
+              </label>
+            </fieldset>
+          </section>
+
+          <div class="schedule-dialog-actions">
+            <button type="button" class="schedule-dialog-actions__secondary" (click)="closeFinishShiftDialog()">
+              Cancel
+            </button>
+            <button type="button" class="schedule-dialog-actions__primary" [disabled]="isLoading" (click)="submitFinishShiftFeedback()">
+              Save feedback
+            </button>
+          </div>
+        </article>
+      </section>
+    }
+
+    @if (validationResult && isValidationDialogOpen && canManageSchedule()) {
+      <section role="dialog" aria-modal="true" aria-label="Schedule check report">
+        <button
+          type="button"
+          class="replacement-backdrop"
+          aria-label="Close schedule check report"
+          (click)="closeValidationDialog()"
+        ></button>
+
+        <article class="replacement-drawer schedule-check-dialog">
+          <header class="replacement-drawer__header">
+            <div>
+              <span>Schedule check</span>
+              <h2>Check Schedule Report</h2>
+              <p>{{ validationResult.recommendation }}</p>
+            </div>
+            <button type="button" aria-label="Close schedule check report" (click)="closeValidationDialog()">x</button>
+          </header>
+
+          <section
+            class="schedule-board__notice"
+            [class.schedule-board__notice--success]="validationStatusClass === 'ready_to_save'"
+            [class.schedule-board__notice--inline-error]="validationStatusClass === 'needs_fixes'"
+          >
+            <span>Current status</span>
+            <strong>{{ validationStatusLabel }}</strong>
+          </section>
+
+          <section class="schedule-board__summary-cards schedule-board__summary-cards--check" aria-label="Schedule check summary">
+            <article class="kpi-card">
+              <span class="kpi-card__label">Blocking issues</span>
+              <strong>{{ blockingValidationIssues.length }}</strong>
+            </article>
+            <article class="kpi-card">
+              <span class="kpi-card__label">Strength warnings</span>
+              <strong>{{ validationResult.strengthIssues.length }}</strong>
+            </article>
+            <article class="kpi-card">
+              <span class="kpi-card__label">Fairness warnings</span>
+              <strong>{{ validationResult.fairnessWarnings.length }}</strong>
+            </article>
+          </section>
+
+          @if (!hasValidationReportIssues) {
+            <section class="schedule-board__notice schedule-board__notice--success">No issues found.</section>
+          }
+
+          @if (blockingValidationIssues.length) {
+            <section class="schedule-board__notice">
+              <h3>Blocking issues</h3>
+              @for (issue of visibleBlockingValidationIssues; track issue.shiftId + ':' + issue.type + ':' + issue.jobRole) {
+                <article>
+                  <strong>{{ formatValidationIssueTitle(issue) }}</strong>
+                  @if (isCoverageIssue(issue)) {
+                    <span>Required {{ issue.requiredCount }}, assigned {{ issue.assignedCount }}, missing {{ issue.missingCount }}</span>
+                  } @else {
+                    <span>{{ formatAssignmentIssueTitle(issue) }}</span>
+                  }
+                </article>
+              }
+              @if (hiddenBlockingIssueCount > 0) {
+                <button type="button" class="schedule-check-more" (click)="toggleBlockingIssuesExpanded()">
+                  + {{ hiddenBlockingIssueCount }} more blocking issues
+                </button>
+              } @else if (blockingValidationIssues.length > 3) {
+                <button type="button" class="schedule-check-more" (click)="toggleBlockingIssuesExpanded()">
+                  Show fewer blocking issues
+                </button>
+              }
+            </section>
+          }
+
+          @if (validationResult.strengthIssues.length) {
+            <section class="schedule-board__notice">
+              <h3>Strength warnings</h3>
+              @for (issue of visibleStrengthWarnings; track issue.shiftId + issue.jobRole) {
+                <article>
+                  <strong>{{ formatValidationIssueTitle(issue) }}</strong>
+                  <span>{{ formatStrengthWarningLine(issue) }}</span>
+                </article>
+              }
+              @if (hiddenStrengthWarningCount > 0) {
+                <button type="button" class="schedule-check-more" (click)="toggleStrengthWarningsExpanded()">
+                  + {{ hiddenStrengthWarningCount }} more strength warnings
+                </button>
+              } @else if (validationResult.strengthIssues.length > 3) {
+                <button type="button" class="schedule-check-more" (click)="toggleStrengthWarningsExpanded()">
+                  Show fewer strength warnings
+                </button>
+              }
+            </section>
+          }
+
+          @if (validationResult.fairnessWarnings.length) {
+            <section class="schedule-board__notice">
+              <h3>Fairness warnings</h3>
+              @for (issue of visibleFairnessWarnings; track issue.employeeId) {
+                <article>
+                  <strong>{{ issue.employeeName }}</strong>
+                  <span>Assigned {{ issue.assignedShifts }} / target {{ issue.targetShifts }}</span>
+                </article>
+              }
+              @if (hiddenFairnessWarningCount > 0) {
+                <button type="button" class="schedule-check-more" (click)="toggleFairnessWarningsExpanded()">
+                  + {{ hiddenFairnessWarningCount }} more fairness warnings
+                </button>
+              } @else if (validationResult.fairnessWarnings.length > 3) {
+                <button type="button" class="schedule-check-more" (click)="toggleFairnessWarningsExpanded()">
+                  Show fewer fairness warnings
+                </button>
+              }
+            </section>
+          }
+        </article>
       </section>
     }
   </section>
@@ -251,6 +449,7 @@
         (removeAssignment)="removeAssignment($event)"
         (applyMlPrediction)="applyMlPrediction($event)"
         (updateRequiredStrength)="updateShiftRequiredStrength($event)"
+        (finishShift)="openFinishShiftDialog($event)"
       />
     } @else {
       <section class="schedule-board__state">

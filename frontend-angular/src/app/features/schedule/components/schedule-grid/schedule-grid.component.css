@@ -4,7 +4,7 @@
   min-width: 0;
   min-height: 0;
   border: 1px solid #d9e1eb;
-  border-radius: 16px;
+  border-radius: 12px;
   background: #f8fafc;
   overflow: hidden;
 }
@@ -15,14 +15,14 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: 12px;
+  padding: 9px;
   scrollbar-color: #90a4b8 #e8eef5;
 }
 
 .schedule-grid {
   display: grid;
-  grid-template-columns: repeat(7, 282px);
-  gap: 12px;
+  grid-template-columns: repeat(7, 288px);
+  gap: 11px;
   width: max-content;
   min-height: 100%;
 }
@@ -30,7 +30,7 @@
 .day-column {
   min-width: 0;
   border: 1px solid #d9e1eb;
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
   overflow: hidden;
 }
@@ -46,11 +46,12 @@
   border-bottom: 1px solid #d9e1eb;
   background: #172331;
   color: #ffffff;
-  padding: 11px 12px;
+  padding: 10px;
 }
 
 .day-column__header span {
   font-weight: 900;
+  letter-spacing: 0.01em;
 }
 
 .day-column__header strong {
@@ -61,8 +62,8 @@
 
 .day-column__shifts {
   display: grid;
-  gap: 10px;
-  padding: 10px;
+  gap: 16px;
+  padding: 9px;
 }
 
 .day-column__empty,
@@ -74,19 +75,21 @@
 
 .shift-card {
   display: grid;
-  gap: 10px;
+  gap: 9px;
   border: 1px solid #e3e9f0;
   border-radius: 12px;
   background: #ffffff;
-  padding: 10px;
+  padding: 9px;
+  box-shadow: 0 12px 28px rgba(27, 44, 66, 0.1);
 }
 
 .shift-card--morning {
-  border-top: 3px solid #d5912b;
+  border-top: 4px solid #d5912b;
 }
 
 .shift-card--evening {
-  border-top: 3px solid #385d96;
+  border-top: 4px solid #385d96;
+  margin-top: 4px;
 }
 
 .shift-card--highlighted {
@@ -98,8 +101,16 @@
   gap: 8px;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #eef2f6;
-  padding-bottom: 7px;
+  border-radius: 9px;
+  padding: 8px;
+}
+
+.shift-card--morning .shift-card__header {
+  background: #fff7e6;
+}
+
+.shift-card--evening .shift-card__header {
+  background: #eef2f8;
 }
 
 .shift-card__header > div {
@@ -108,8 +119,8 @@
 }
 
 .shift-card__marker {
-  width: 7px;
-  height: 20px;
+  width: 5px;
+  height: 18px;
   border-radius: 999px;
 }
 
@@ -124,30 +135,54 @@
 .shift-card__header h2 {
   margin: 0;
   color: #172331;
-  font-size: 0.96rem;
+  font-size: 0.94rem;
+  font-weight: 900;
 }
 
 .shift-card__header p {
   margin: 2px 0 0;
   color: #66778a;
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 700;
 }
 
-.shift-card__edit-action {
+.shift-card__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
+  margin-right: 10px;
+}
+
+.shift-card__edit-action,
+.shift-card__finish-action {
   flex: 0 0 auto;
   min-height: 28px;
-  border: 1px solid #c7d2df;
+  border: 1px solid #cad9de;
   border-radius: 8px;
   background: #ffffff;
-  color: #173247;
+  color: #21434b;
   cursor: pointer;
   font-size: 0.72rem;
   font-weight: 900;
   padding: 0 8px;
 }
 
-.shift-card__edit-action:hover {
+.shift-card__finish-action {
+  border-color: #addbc2;
+  background: #f0fbf6;
+  color: #216343;
+}
+
+.shift-card__finish-action:disabled {
+  border-color: #d7e0ea;
+  background: #f1f5f9;
+  color: #718096;
+  cursor: default;
+}
+
+.shift-card__edit-action:hover,
+.shift-card__finish-action:not(:disabled):hover {
   border-color: #1d6f8f;
 }
 
@@ -249,11 +284,11 @@
 .role-group {
   display: grid;
   gap: 8px;
-  border: 1px solid #e3e9f0;
+  border: 1px solid transparent;
   border-left: 4px solid #8aa0b5;
   border-radius: 10px;
-  background: #ffffff;
-  padding: 9px;
+  background: #f6f8fb;
+  padding: 8px 9px;
 }
 
 .role-group--shift-leader {
@@ -270,6 +305,7 @@
 
 .role-group--understaffed {
   border-left-color: #d5912b;
+  background: #fff8ea;
 }
 
 .role-group--highlighted {
@@ -288,7 +324,8 @@
 .role-group__header h3 {
   margin: 0;
   color: #172331;
-  font-size: 0.84rem;
+  font-size: 0.86rem;
+  font-weight: 900;
 }
 
 .role-group__header p {
@@ -304,7 +341,7 @@
   color: #34465b;
   font-size: 0.66rem;
   font-weight: 900;
-  padding: 3px 7px;
+  padding: 2px 6px;
   white-space: nowrap;
 }
 
@@ -314,18 +351,18 @@
 }
 
 .role-group--covered .role-group__header > span {
-  background: #fff1d0;
-  color: #8a5a13;
+  background: #fff4dc;
+  color: #805715;
 }
 
 .role-group--understaffed .role-group__header > span {
-  background: #fff1d0;
-  color: #8a5a13;
+  background: #fff4dc;
+  color: #805715;
 }
 
 .worker-list {
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .worker-row {
@@ -334,10 +371,10 @@
   gap: 8px;
   align-items: center;
   width: 100%;
-  min-height: 36px;
-  border: 1px solid #e3e9f0;
-  border-radius: 9px;
-  background: #f8fafc;
+  min-height: 35px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: #ffffff;
   color: inherit;
   padding: 5px 7px;
   text-align: left;
@@ -383,16 +420,23 @@
 .worker-row__name {
   overflow: hidden;
   color: #172331;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .worker-row__metrics {
   color: #46596d;
-  font-size: 0.76rem;
+  font-size: 0.74rem;
   font-weight: 900;
   white-space: nowrap;
+}
+
+.worker-row__ratio {
+  margin-left: 5px;
+  color: #66778a;
+  font-weight: 800;
 }
 
 .role-group__footer {
@@ -401,6 +445,22 @@
   font-size: 0.7rem;
   font-weight: 800;
   padding-top: 6px;
+}
+
+.role-group__add-worker {
+  min-height: 30px;
+  border: 1px dashed #8aa0b5;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #173247;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 900;
+}
+
+.role-group__add-worker:hover {
+  border-color: #1d6f8f;
+  color: #1d6f8f;
 }
 
 .worker-action-panel {

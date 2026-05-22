@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, signal } from '@angular/core';
-import { Observable, tap } from 'rxjs';
+import { catchError, map, Observable, of, tap } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
 import { AuthUser, LoginResponse } from './auth.models';
@@ -13,6 +13,7 @@ const USER_STORAGE_KEY = 'smartShiftUser';
 })
 export class AuthService {
   private readonly apiUrl = `${environment.apiBaseUrl}/auth`;
+  private isSessionVerified = false;
   readonly currentUser = signal<AuthUser | null>(this.readStoredUser());
 
   constructor(private readonly http: HttpClient) {}
@@ -27,6 +28,7 @@ export class AuthService {
         tap((response) => {
           localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
+          this.isSessionVerified = true;
           this.currentUser.set(response.user);
         })
       );
@@ -44,6 +46,7 @@ export class AuthService {
         tap((response) => {
           localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
+          this.isSessionVerified = true;
           this.currentUser.set(response.user);
         })
       );
@@ -53,6 +56,7 @@ export class AuthService {
     return this.http.get<{ user: AuthUser }>(`${this.apiUrl}/me`).pipe(
       tap((response) => {
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
+        this.isSessionVerified = true;
         this.currentUser.set(response.user);
       })
     );
@@ -61,6 +65,7 @@ export class AuthService {
   logout(): void {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
+    this.isSessionVerified = false;
     this.currentUser.set(null);
   }
 
@@ -70,6 +75,27 @@ export class AuthService {
 
   isLoggedIn(): boolean {
     return Boolean(this.getToken() && this.currentUser());
+  }
+
+  validateSession(): Observable<boolean> {
+    const token = this.getToken();
+
+    if (!token) {
+      this.logout();
+      return of(false);
+    }
+
+    if (this.isSessionVerified && this.currentUser()) {
+      return of(true);
+    }
+
+    return this.loadCurrentUser().pipe(
+      map(() => true),
+      catchError(() => {
+        this.logout();
+        return of(false);
+      })
+    );
   }
 
   private readStoredUser(): AuthUser | null {

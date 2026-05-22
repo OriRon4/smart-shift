@@ -1,4 +1,11 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  Input,
+  OnChanges,
+  Output,
+  SimpleChanges
+} from '@angular/core';
 
 import {
   ScheduleDay,
@@ -20,8 +27,9 @@ export interface ReplaceAssignmentRequest {
   shiftType: string;
   jobRole: JobRole;
   roleLabel: string;
-  employeeId: number;
-  employeeName: string;
+  employeeId: number | null;
+  employeeName: string | null;
+  mode: 'replace' | 'add';
 }
 
 @Component({
@@ -30,7 +38,7 @@ export interface ReplaceAssignmentRequest {
   templateUrl: './schedule-grid.component.html',
   styleUrl: './schedule-grid.component.css'
 })
-export class ScheduleGridComponent {
+export class ScheduleGridComponent implements OnChanges {
   @Input({ required: true }) board: ScheduleBoardResponse | null = null;
   @Input() canManage = false;
   @Input() activeShiftIds = new Set<number>();
@@ -41,18 +49,19 @@ export class ScheduleGridComponent {
 
   @Output() replaceAssignment = new EventEmitter<ReplaceAssignmentRequest>();
   @Output() removeAssignment = new EventEmitter<ReplaceAssignmentRequest>();
-  @Output() updateRequiredStrength = new EventEmitter<{
-    shiftId: number;
-    requiredWaiters: number;
-    requiredBartenders: number;
-    requiredShiftLeaders: number;
-    requiredStrengthScore: number;
-  }>();
+  @Output() updateRequiredStrength = new EventEmitter<ShiftRequirementsUpdate>();
   @Output() applyMlPrediction = new EventEmitter<number>();
+  @Output() finishShift = new EventEmitter<ScheduleShift>();
 
   protected selectedAssignmentKey: string | null = null;
   protected editingShiftId: number | null = null;
   protected requirementDrafts = new Map<number, ShiftRequirementsUpdate>();
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['board']) {
+      this.requirementDrafts.clear();
+    }
+  }
 
   getRoleGroupStatus(roleGroup: ScheduleRoleGroup): RoleGroupStatus {
     if (roleGroup.uncoveredSlots === undefined) {
@@ -159,6 +168,14 @@ export class ScheduleGridComponent {
     this.editingShiftId = null;
   }
 
+  requestFinishShift(shift: ScheduleShift): void {
+    if (!this.canManage || shift.hasPerformanceFeedback) {
+      return;
+    }
+
+    this.finishShift.emit(shift);
+  }
+
   getRequirementDraft(shift: ScheduleShift): ShiftRequirementsUpdate {
     const existingDraft = this.requirementDrafts.get(shift.shiftId);
 
@@ -260,9 +277,28 @@ export class ScheduleGridComponent {
       jobRole: roleGroup.jobRole,
       roleLabel: roleGroup.label,
       employeeId: worker.employeeId,
-      employeeName: worker.fullName
+      employeeName: worker.fullName,
+      mode: 'replace'
     });
     this.selectedAssignmentKey = null;
+  }
+
+  requestAddWorker(
+    day: ScheduleDay,
+    shift: ScheduleShift,
+    roleGroup: ScheduleRoleGroup
+  ): void {
+    this.replaceAssignment.emit({
+      shiftId: shift.shiftId,
+      dayName: day.dayName,
+      date: day.date,
+      shiftType: this.formatShiftType(shift),
+      jobRole: roleGroup.jobRole,
+      roleLabel: roleGroup.label,
+      employeeId: null,
+      employeeName: null,
+      mode: 'add'
+    });
   }
 
   requestRemoval(
@@ -279,9 +315,14 @@ export class ScheduleGridComponent {
       jobRole: roleGroup.jobRole,
       roleLabel: roleGroup.label,
       employeeId: worker.employeeId,
-      employeeName: worker.fullName
+      employeeName: worker.fullName,
+      mode: 'replace'
     });
     this.selectedAssignmentKey = null;
+  }
+
+  hasOpenSlot(roleGroup: ScheduleRoleGroup): boolean {
+    return roleGroup.assignedCount < roleGroup.requiredCount;
   }
 
   private getRoleRequirement(shift: ScheduleShift, jobRole: JobRole): number {

@@ -235,13 +235,41 @@ async function getShiftRequestsByWeek(weekStartDate) {
   return rows;
 }
 
+async function getPerformanceLogsByWeek(weekStartDate) {
+  const weekRange = getWeekRange(weekStartDate);
+  const [rows] = await pool.query(
+    `
+      SELECT
+        shift_date,
+        shift_type,
+        created_at
+      FROM shift_performance_logs
+      WHERE shift_date BETWEEN ? AND ?
+    `,
+    [weekRange.weekStartDate, weekRange.weekEndDate]
+  );
+
+  return rows.map((row) => ({
+    shiftDate: formatDateKey(row.shift_date),
+    shiftType: row.shift_type,
+    createdAt: formatDateTimeValue(row.created_at),
+  }));
+}
+
 async function getScheduleInputsByWeek(weekStartDate) {
   const weekRange = getWeekRange(weekStartDate);
-  const [employees, allEmployees, shifts, shiftRequests] = await Promise.all([
+  const [
+    employees,
+    allEmployees,
+    shifts,
+    shiftRequests,
+    performanceLogs,
+  ] = await Promise.all([
     getActiveScheduleEmployees(),
     getAllEmployees(),
     ensureWeeklyShifts(weekRange.weekStartDate),
     getShiftRequestsByWeek(weekRange.weekStartDate),
+    getPerformanceLogsByWeek(weekRange.weekStartDate),
   ]);
 
   return {
@@ -251,6 +279,7 @@ async function getScheduleInputsByWeek(weekStartDate) {
     allEmployees,
     shifts,
     shiftRequests,
+    performanceLogs,
   };
 }
 
@@ -347,6 +376,37 @@ async function getPersistedScheduleByWeek(weekStartDate) {
       assignedStrengthScore: Number(assignment.assigned_strength_score),
     })),
   };
+}
+
+async function ensureWeeklyScheduleByWeekStartDate(weekStartDate) {
+  const weekRange = getWeekRange(weekStartDate);
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const existingSchedule = await getWeeklyScheduleByWeekStartDate(
+      connection,
+      weekRange.weekStartDate
+    );
+    const scheduleId = existingSchedule
+      ? existingSchedule.id
+      : await createWeeklySchedule(connection, weekRange.weekStartDate);
+
+    await connection.commit();
+
+    return {
+      scheduleId,
+      weekStartDate: weekRange.weekStartDate,
+      publishedAt: formatDateTimeValue(existingSchedule?.published_at),
+      assignments: [],
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function getPersistedScheduleById(scheduleId) {
@@ -595,10 +655,12 @@ module.exports = {
   updateShiftRequiredStrength,
   updateShiftRequirements,
   getShiftRequestsByWeek,
+  getPerformanceLogsByWeek,
   getScheduleInputsByWeek,
   getWeeklyScheduleByWeekStartDate,
   getWeeklyScheduleById,
   getPersistedScheduleByWeek,
+  ensureWeeklyScheduleByWeekStartDate,
   getPersistedScheduleById,
   saveScheduleAssignments,
   clearScheduleAssignments,

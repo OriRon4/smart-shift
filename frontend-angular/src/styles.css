@@ -31,3 +31,103 @@ select,
 textarea {
   font-family: inherit;
 }
+
+.schedule-action-dialog {
+  gap: 16px;
+  padding: 18px;
+}
+
+.schedule-action-dialog > p,
+.schedule-action-dialog__hint {
+  margin: 0;
+  color: #66778a;
+  line-height: 1.4;
+}
+
+.schedule-action-dialog > p:first-of-type {
+  color: #34465b;
+  font-weight: 800;
+}
+
+.schedule-dialog-actions,
+.schedule-dialog-actions button {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.schedule-dialog-actions button {
+  min-height: 38px;
+  border-radius: 9px;
+  font-weight: 900;
+  padding: 0 14px;
+}
+
+.schedule-dialog-actions__secondary {
+  border: 1px solid #c7d2df;
+  background: #ffffff;
+  color: #173247;
+}
+
+.schedule-dialog-actions__primary {
+  border: 1px solid #1d6f8f;
+  background: #1d6f8f;
+  color: #ffffff;
+}
+
+.finish-feedback {
+  display: grid;
+  gap: 10px;
+}
+
+.finish-feedback fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin: 0;
+  border: 1px solid #e1e7ef;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 10px;
+}
+
+.finish-feedback legend {
+  grid-column: 1 / -1;
+  margin-bottom: 1px;
+  color: #172331;
+  font-size: 0.86rem;
+  font-weight: 900;
+}
+
+.finish-feedback__option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border: 1px solid #c7d2df;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #34465b;
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 900;
+  user-select: none;
+}
+
+.finish-feedback__option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.finish-feedback__option--selected {
+  border-color: #1d6f8f;
+  background: #eef7fa;
+  color: #173247;
+}
+
+.finish-feedback__option:hover {
+  border-color: #1d6f8f;
+  background: #f5fbfd;
+}
