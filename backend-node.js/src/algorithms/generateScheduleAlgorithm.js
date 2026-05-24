@@ -763,6 +763,7 @@ function improveScheduleWithIterations(
   let rejectedSwaps = 0;
   const acceptedSwaps = [];
   const correctionLog = [];
+  const iterationHistory = [];
 
   for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
     const improvement = tryImproveBySameRoleSwaps(
@@ -777,8 +778,22 @@ function improveScheduleWithIterations(
       break;
     }
 
+    const scoreBeforeIteration = currentScore;
+    const scoreAfterIteration = improvement.bestImprovement.score;
+
+    iterationHistory.push({
+      iteration,
+      accepted: true,
+      scoreBefore: scoreBeforeIteration,
+      scoreAfter: scoreAfterIteration,
+      delta: roundScore(
+        scoreBeforeIteration.totalScore - scoreAfterIteration.totalScore
+      ),
+      swap: improvement.bestImprovement.swap,
+    });
+
     assignments = improvement.bestImprovement.assignments;
-    currentScore = improvement.bestImprovement.score;
+    currentScore = scoreAfterIteration;
     acceptedSwaps.push(improvement.bestImprovement.swap);
     correctionLog.push({
       iteration,
@@ -801,6 +816,7 @@ function improveScheduleWithIterations(
       acceptedSwaps,
       rejectedSwaps,
       correctionLog,
+      iterationHistory,
     },
   };
 }

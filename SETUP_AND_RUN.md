@@ -18,7 +18,8 @@ Create the database:
 CREATE DATABASE smart_shift;
 ```
 
-From the project root, run the schema:
+From the project root, run the final schema. This file is the source of truth
+for the clean Smart-Shift database structure:
 
 ```powershell
 mysql -u root -p smart_shift < db-mysql/schema/schema.sql
@@ -30,15 +31,14 @@ Run core demo data:
 mysql -u root -p smart_shift < db-mysql/seed/seed.sql
 ```
 
-Run synthetic ML training demo data:
+Optionally run synthetic ML training demo data:
 
 ```powershell
 mysql -u root -p smart_shift < db-mysql/seed/ml_shift_performance_seed.sql
 ```
 
-For an older database, keep the migration files in `db-mysql/migrations/` and
-apply the needed versions in order. Do not delete old migrations because they
-document how an existing demo database moves to the final schema.
+No migrations are required for a new database. Legacy migration files are kept
+only for reference under `archive/db-mysql/migrations/`.
 
 ## 3. Backend Environment
 

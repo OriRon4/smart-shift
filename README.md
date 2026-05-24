@@ -43,7 +43,6 @@ frontend-angular/
 db-mysql/
   schema/           Fresh-install schema
   seed/             Demo data and ML training demo data
-  migrations/       Legacy upgrade scripts for older local databases
 
 ml/
   models/           Trained model artifacts
@@ -52,20 +51,23 @@ ml/
   predict_shift_requirements.py
 
 archive/
+  db-mysql/         Legacy database migrations, not required for fresh setup
   project-prompts/  Historical planning/prompt files, not required to run
 ```
 
 ## Database Flow
 
 For a clean setup, `db-mysql/schema/schema.sql` is the source of truth for the
-final schema. Then load `db-mysql/seed/seed.sql` for demo users, employees,
-shifts, and availability. The optional
-`db-mysql/seed/ml_shift_performance_seed.sql` file adds synthetic historical
-data used by the ML training workflow.
+final database structure. New databases do not require migrations.
 
-The files under `db-mysql/migrations/` are kept as a legacy upgrade path for
-older local demo databases. They are not required when creating a fresh
-database from `schema/schema.sql`.
+Official fresh database flow:
+
+1. Run `db-mysql/schema/schema.sql`.
+2. Run `db-mysql/seed/seed.sql` for demo users, employees, shifts, and availability.
+3. Optionally run `db-mysql/seed/ml_shift_performance_seed.sql` for synthetic ML history.
+
+Legacy migrations are archived under `archive/db-mysql/migrations/`. They are
+kept for reference only and are not part of the setup flow for a new database.
 
 ## Quick Start
 
