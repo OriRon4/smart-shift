@@ -12,19 +12,24 @@ const USER_STORAGE_KEY = 'smartShiftUser';
   providedIn: 'root'
 })
 export class AuthService {
+  // כתובת הבסיס לכל קריאות ההתחברות בשרת.
   private readonly apiUrl = `${environment.apiBaseUrl}/auth`;
   private isSessionVerified = false;
+  // שומר בזיכרון את המשתמש הנוכחי כדי שרכיבים ו-guards יוכלו לקרוא אותו.
   readonly currentUser = signal<AuthUser | null>(this.readStoredUser());
 
   constructor(private readonly http: HttpClient) {}
 
+  // שולח התחברות לשרת ומחזיר Observable שהקומפוננטה עושה עליו subscribe.
   login(login: string, password: string): Observable<LoginResponse> {
     return this.http
+      // POST אל /api/auth/login עם שם משתמש/אימייל וסיסמה.
       .post<LoginResponse>(`${this.apiUrl}/login`, {
         login,
         password
       })
       .pipe(
+        // אם השרת אישר התחברות, שומרים token ומשתמש להמשך הבקשות.
         tap((response) => {
           localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
           localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
@@ -53,6 +58,7 @@ export class AuthService {
   }
 
   loadCurrentUser(): Observable<{ user: AuthUser }> {
+    // קורא ל-/me כדי לוודא שה-token עדיין תקין ולקבל משתמש עדכני.
     return this.http.get<{ user: AuthUser }>(`${this.apiUrl}/me`).pipe(
       tap((response) => {
         localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
@@ -78,17 +84,21 @@ export class AuthService {
   }
 
   validateSession(): Observable<boolean> {
+    // ה-guard משתמש בזה כדי להחליט אם מותר להיכנס למסכים מוגנים.
     const token = this.getToken();
 
     if (!token) {
+      // בלי token אין התחברות, אז מנקים מצב מקומי.
       this.logout();
       return of(false);
     }
 
     if (this.isSessionVerified && this.currentUser()) {
+      // אם כבר אימתנו את הסשן, לא צריך לקרוא שוב לשרת.
       return of(true);
     }
 
+    // אם יש token אבל עוד לא אומת, בודקים מול השרת.
     return this.loadCurrentUser().pipe(
       map(() => true),
       catchError(() => {

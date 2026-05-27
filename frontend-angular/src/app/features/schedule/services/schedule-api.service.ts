@@ -21,7 +21,9 @@ export class ScheduleApiService {
   // HttpClient מבצע את קריאות ה-HTTP בפועל.
   constructor(private readonly http: HttpClient) {}
 
+  // מביא סידור קיים לשבוע; לא יוצר שיבוצים חדשים.
   getSchedule(weekStartDate: string): Observable<ScheduleBoardResponse> {
+    // weekStartDate נשלח כ-query param אל GET /api/schedules.
     const params = new HttpParams().set('weekStartDate', weekStartDate);
     return this.http.get<ScheduleBoardResponse>(this.apiUrl, { params });
   }
@@ -56,6 +58,7 @@ export class ScheduleApiService {
     assignments?: SaveScheduleAssignment[],
     hasUnsavedChanges = false
   ): Observable<ScheduleValidationResponse> {
+    // שולח בדיקת סידור ל-/validate ומחזיר דוח בעיות/אזהרות.
     return this.http.post<ScheduleValidationResponse>(
       `${this.apiUrl}/${scheduleId}/validate`,
       {
@@ -73,6 +76,7 @@ export class ScheduleApiService {
   }
 
   publishSchedule(scheduleId: number): Observable<ScheduleBoardResponse> {
+    // מפרסם סידור קיים: השרת מעדכן published_at.
     return this.http.post<ScheduleBoardResponse>(
       `${this.apiUrl}/${scheduleId}/publish`,
       {}
@@ -80,6 +84,7 @@ export class ScheduleApiService {
   }
 
   unpublishSchedule(scheduleId: number): Observable<ScheduleBoardResponse> {
+    // מבטל פרסום סידור קיים: השרת מאפס published_at.
     return this.http.delete<ScheduleBoardResponse>(
       `${this.apiUrl}/${scheduleId}/publish`
     );

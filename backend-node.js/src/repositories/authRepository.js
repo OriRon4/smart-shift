@@ -1,6 +1,7 @@
 const pool = require("../config/db");
 
 function mapUser(row) {
+  // ממיר שורה מה-DB לאובייקט user שה-service עובד איתו.
   if (!row) {
     return null;
   }
@@ -19,6 +20,7 @@ function mapUser(row) {
 }
 
 async function findUserByLogin(login) {
+  // מחפש משתמש לפי username או email ומצרף נתוני עובד אם קיימים.
   const [rows] = await pool.query(
     `
       SELECT
@@ -45,6 +47,7 @@ async function findUserByLogin(login) {
 }
 
 async function findUserById(userId) {
+  // משמש את requireAuth: בדיקה שה-userId מתוך ה-token עדיין קיים.
   const [rows] = await pool.query(
     `
       SELECT

@@ -21,7 +21,9 @@ function formatDayName(dateKey) {
 }
 
 function buildAvailabilityGrid(shifts, selectedShiftIds = []) {
+  // Set של shiftId -> האם העובד בחר את המשמרת.
   const selectedShiftIdSet = new Set(selectedShiftIds);
+  // Map של dateKey -> רשימת משמרות באותו יום.
   const shiftsByDate = new Map();
 
   for (const shift of shifts) {
@@ -46,10 +48,12 @@ function buildAvailabilityGrid(shifts, selectedShiftIds = []) {
 }
 
 async function getMyAvailability(user, weekStartDate) {
+  // משתמש חייב להיות מקושר לעובד כדי שתהיה לו זמינות.
   if (!user.employeeId) {
     throw createHttpError(400, "Current user is not linked to an employee");
   }
 
+  // טוענים את כל משמרות השבוע ואת הבחירות שכבר נשמרו לעובד.
   const shifts = await availabilityRepository.getShiftsForAvailability(weekStartDate);
   const selectedShiftIds =
     await availabilityRepository.getAvailabilityForEmployee(
@@ -66,6 +70,7 @@ async function getMyAvailability(user, weekStartDate) {
 }
 
 async function submitMyAvailability(user, weekStartDate, shiftIds) {
+  // שמירת זמינות עובדת רק למשתמש שמקושר לעובד.
   if (!user.employeeId) {
     throw createHttpError(400, "Current user is not linked to an employee");
   }
@@ -74,6 +79,7 @@ async function submitMyAvailability(user, weekStartDate, shiftIds) {
     throw createHttpError(400, "shiftIds must be an array");
   }
 
+  // מחליפים את כל הבחירות הקודמות של השבוע בבחירות החדשות.
   const selectedShiftIds =
     await availabilityRepository.replaceAvailabilityForEmployee(
       user.employeeId,
@@ -82,6 +88,7 @@ async function submitMyAvailability(user, weekStartDate, shiftIds) {
     );
   const shifts = await availabilityRepository.getShiftsForAvailability(weekStartDate);
 
+  // מחזירים ל-Frontend גריד מעודכן להצגה.
   return {
     message: "Availability submitted successfully",
     employeeId: user.employeeId,
@@ -174,6 +181,7 @@ async function updateEmployeeAvailability(employeeId, weekStartDate, shiftIds, u
 
 async function getAllAvailability(weekStartDate) {
   const rows = await availabilityRepository.getAllAvailability(weekStartDate);
+  // Map של employee_id -> סיכום הזמינות של אותו עובד.
   const submissionsByEmployeeId = new Map();
 
   for (const row of rows) {

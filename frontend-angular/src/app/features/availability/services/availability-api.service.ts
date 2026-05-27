@@ -12,10 +12,12 @@ import {
   providedIn: 'root'
 })
 export class AvailabilityApiService {
+  // כתובת הבסיס לכל קריאות הזמינות בשרת.
   private readonly apiUrl = `${environment.apiBaseUrl}/availability`;
 
   constructor(private readonly http: HttpClient) {}
 
+  // טוען את הזמינות של המשתמש המחובר לשבוע מסוים.
   getMyAvailability(weekStartDate: string): Observable<AvailabilityResponse> {
     const params = new HttpParams().set('weekStartDate', weekStartDate);
     return this.http.get<AvailabilityResponse>(`${this.apiUrl}/me`, { params });
@@ -30,6 +32,7 @@ export class AvailabilityApiService {
     weekStartDate: string,
     shiftIds: number[]
   ): Observable<AvailabilityResponse> {
+    // POST אל /api/availability/me עם weekStartDate ו-shiftIds שנבחרו.
     return this.http.post<AvailabilityResponse>(`${this.apiUrl}/me`, {
       weekStartDate,
       shiftIds

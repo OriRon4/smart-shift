@@ -19,8 +19,11 @@ import {
   styleUrl: './availability-page.component.css'
 })
 export class AvailabilityPageComponent implements OnInit {
+  // השבוע שעליו העובד מסמן זמינות.
   protected selectedWeekStartDate = getCurrentWeekStartDate();
+  // התשובה מהשרת: ימים, משמרות ומה כבר נבחר.
   protected availability: AvailabilityResponse | null = null;
+  // Set של shiftId -> האם העובד סימן שהוא פנוי למשמרת.
   protected selectedShiftIds = new Set<number>();
   protected isLoading = false;
   protected errorMessage = '';
@@ -29,6 +32,7 @@ export class AvailabilityPageComponent implements OnInit {
   constructor(private readonly availabilityApiService: AvailabilityApiService) {}
 
   ngOnInit(): void {
+    // בכניסה למסך טוענים את הזמינות של השבוע הנוכחי.
     this.loadAvailability();
   }
 
@@ -51,6 +55,7 @@ export class AvailabilityPageComponent implements OnInit {
   }
 
   protected toggleShift(shiftId: number): void {
+    // אם המשמרת כבר נבחרה מסירים אותה, אחרת מוסיפים אותה.
     if (this.selectedShiftIds.has(shiftId)) {
       this.selectedShiftIds.delete(shiftId);
       return;
@@ -60,21 +65,25 @@ export class AvailabilityPageComponent implements OnInit {
   }
 
   protected submitAvailability(): void {
+    // מתחילים שמירה ומנקים הודעות קודמות.
     this.isLoading = true;
     this.errorMessage = '';
     this.successMessage = '';
 
     this.availabilityApiService
+      // שולחים לשרת את השבוע ואת כל ה-shiftIds שנבחרו.
       .submitMyAvailability(
         this.selectedWeekStartDate,
         [...this.selectedShiftIds.values()]
       )
       .subscribe({
+        // השרת מחזיר גריד מעודכן; מחליפים את המצב המקומי.
         next: (availability) => {
           this.applyAvailability(availability);
           this.successMessage = 'Availability submitted.';
           this.isLoading = false;
         },
+        // בשגיאה נשארים במסך ומציגים הודעה.
         error: (error: unknown) => {
           this.errorMessage = this.resolveErrorMessage(error);
           this.isLoading = false;
@@ -83,6 +92,7 @@ export class AvailabilityPageComponent implements OnInit {
   }
 
   private loadAvailability(): void {
+    // טוען מהשרת את הזמינות הקיימת לשבוע שנבחר.
     this.isLoading = true;
     this.errorMessage = '';
     this.successMessage = '';
@@ -90,6 +100,7 @@ export class AvailabilityPageComponent implements OnInit {
     this.availabilityApiService
       .getMyAvailability(this.selectedWeekStartDate)
       .subscribe({
+        // מעדכן גם את הגריד וגם את ה-Set של הבחירות.
         next: (availability) => {
           this.applyAvailability(availability);
           this.isLoading = false;
@@ -102,11 +113,13 @@ export class AvailabilityPageComponent implements OnInit {
   }
 
   private applyAvailability(availability: AvailabilityResponse): void {
+    // selectedShiftIds נשמר כ-Set כדי שבדיקה/הוספה/מחיקה יהיו פשוטות.
     this.availability = availability;
     this.selectedShiftIds = new Set(availability.selectedShiftIds);
   }
 
   private changeSelectedWeek(dayOffset: number): void {
+    // מעבר שבוע משנה תאריך ואז טוען זמינות חדשה.
     this.selectedWeekStartDate = this.addDays(
       this.selectedWeekStartDate,
       dayOffset

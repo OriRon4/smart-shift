@@ -3,13 +3,16 @@ const scheduleRepository = require("./scheduleRepository");
 const { getWeekRange } = require("../utils/week");
 
 async function getShiftsForAvailability(weekStartDate) {
+  // מוודא שיש 14 משמרות לשבוע ומחזיר אותן למסך הזמינות.
   return scheduleRepository.ensureWeeklyShifts(weekStartDate);
 }
 
 async function getAvailabilityForEmployee(employeeId, weekStartDate) {
+  // מחשבים טווח שבוע כדי להביא רק בקשות של אותו שבוע.
   const weekRange = getWeekRange(weekStartDate);
   await scheduleRepository.ensureWeeklyShifts(weekRange.weekStartDate);
 
+  // מחזיר רשימת shift_id שהעובד סימן כזמין.
   const [rows] = await pool.query(
     `
       SELECT
@@ -30,7 +33,9 @@ async function getAvailabilityForEmployee(employeeId, weekStartDate) {
 async function replaceAvailabilityForEmployee(employeeId, weekStartDate, shiftIds) {
   const weekRange = getWeekRange(weekStartDate);
   const shifts = await scheduleRepository.ensureWeeklyShifts(weekRange.weekStartDate);
+  // Set של shiftId תקין -> משמרת קיימת בשבוע הזה.
   const validShiftIds = new Set(shifts.map((shift) => shift.id));
+  // מנקים כפילויות ומוודאים שכל id מספרי.
   const selectedShiftIds = [...new Set(shiftIds.map(Number))];
 
   for (const shiftId of selectedShiftIds) {
@@ -50,8 +55,10 @@ async function replaceAvailabilityForEmployee(employeeId, weekStartDate, shiftId
   const connection = await pool.getConnection();
 
   try {
+    // מחיקה והכנסה מתבצעות ב-transaction כדי לא להשאיר חצי שמירה.
     await connection.beginTransaction();
 
+    // מוחקים את כל הזמינות הישנה של העובד באותו שבוע.
     await connection.query(
       `
         DELETE shift_requests
@@ -65,6 +72,7 @@ async function replaceAvailabilityForEmployee(employeeId, weekStartDate, shiftId
     );
 
     if (selectedShiftIds.length) {
+      // מכניסים את כל הבחירות החדשות לטבלת shift_requests.
       const values = selectedShiftIds.map((shiftId) => [employeeId, shiftId]);
       await connection.query(
         `
@@ -80,6 +88,7 @@ async function replaceAvailabilityForEmployee(employeeId, weekStartDate, shiftId
 
     await connection.commit();
   } catch (error) {
+    // אם משהו נכשל, מחזירים את ה-DB למצב הקודם.
     await connection.rollback();
     throw error;
   } finally {

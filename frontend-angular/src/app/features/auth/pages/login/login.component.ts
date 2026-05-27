@@ -33,7 +33,9 @@ export class LoginComponent {
     this.password = 'password';
   }
 
+  // נקודת הכניסה של התחברות מהטופס במסך.
   submit(): void {
+    // בודקים שהקלט נראה תקין לפני קריאת ה-API.
     const login = this.loginValue.trim();
 
     if (login.includes('@') && !EMAIL_PATTERN.test(login)) {
@@ -44,11 +46,14 @@ export class LoginComponent {
     this.isLoading = true;
     this.errorMessage = '';
 
+    // שולחים login/password ל-AuthService; ה-service מחזיר Observable.
     this.authService.login(this.loginValue, this.password).subscribe({
+      // בהצלחה המשתמש כבר נשמר ב-service, ואז עוברים למסך הסידור.
       next: () => {
         this.isLoading = false;
         void this.router.navigate(['/schedule']);
       },
+      // בשגיאה מציגים הודעה במסך ונשארים בעמוד התחברות.
       error: (error: unknown) => {
         this.errorMessage = this.resolveErrorMessage(error);
         this.isLoading = false;

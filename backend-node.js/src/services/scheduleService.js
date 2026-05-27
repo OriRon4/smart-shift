@@ -117,14 +117,17 @@ function canEditScheduleAssignments(user) {
 }
 
 async function getScheduleForWeek(weekStartDate, user) {
+  // זרימת צפייה בסידור: מתחילים מנתוני השבוע והמשמרות.
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
     weekStartDate
   );
+  // בודקים אם כבר נשמר סידור לשבוע הזה.
   const persistedSchedule = await scheduleRepository.getPersistedScheduleByWeek(
     scheduleInputs.weekStartDate
   );
 
   if (!persistedSchedule) {
+    // עובד/אחראי משמרת לא רואה סידור שלא נוצר עדיין.
     if (user.permissionRole !== PERMISSION_ROLES.MANAGER) {
       return {
         scheduleId: null,
@@ -137,10 +140,12 @@ async function getScheduleForWeek(weekStartDate, user) {
       };
     }
 
+    // למנהל יוצרים רשומת weekly_schedule ריקה כדי שיהיה board לעריכה.
     const emptySchedule =
       await scheduleRepository.ensureWeeklyScheduleByWeekStartDate(
         scheduleInputs.weekStartDate
       );
+    // בונים board ריק מאותם נתוני שבוע.
     const emptyAlgorithmResult = buildAlgorithmResultFromAssignments(
       scheduleInputs,
       []
@@ -154,6 +159,7 @@ async function getScheduleForWeek(weekStartDate, user) {
   }
 
   if (!persistedSchedule.publishedAt && !canViewUnpublishedSchedule(user)) {
+    // אם הסידור לא פורסם, רק manager יכול לראות אותו.
     return {
       message: "Schedule has not been published yet.",
       scheduleId: persistedSchedule.scheduleId,
@@ -166,11 +172,13 @@ async function getScheduleForWeek(weekStartDate, user) {
     };
   }
 
+  // ממירים שיבוצים שמורים למבנה שה-formatter יודע להציג.
   const algorithmResult = buildAlgorithmResultFromAssignments(
     scheduleInputs,
     persistedSchedule.assignments
   );
 
+  // מחזירים board מלא ל-Angular להצגה במסך.
   return buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
     scheduleId: persistedSchedule.scheduleId,
     publishedAt: persistedSchedule.publishedAt,
@@ -688,13 +696,16 @@ async function validateSchedule(
   hasUnsavedChanges,
   user
 ) {
+  // מאתרים את השבוע האמיתי של הסידור לפי scheduleId/weekStartDate.
   const persistedScheduleForWeek = await resolveScheduleWeek(
     scheduleId,
     weekStartDate
   );
+  // טוענים את כל נתוני השבוע הדרושים לבדיקה.
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
     persistedScheduleForWeek.weekStartDate
   );
+  // מביאים את הסידור השמור מה-DB.
   const persistedSchedule = await scheduleRepository.getPersistedScheduleByWeek(
     scheduleInputs.weekStartDate
   );
@@ -703,26 +714,33 @@ async function validateSchedule(
     throw createHttpError(404, "No saved schedule exists for this week");
   }
 
+  // אם נשלחו שיבוצים מהמסך בודקים אותם, אחרת משתמשים בשיבוצים השמורים.
   const assignments = Array.isArray(assignmentsBody)
     ? validateAssignmentPayload(assignmentsBody, { requireNonEmpty: false })
     : persistedSchedule.assignments;
 
+  // מוודא שהשיבוצים שייכים לשבוע ולתפקידים הנכונים.
   ensureAssignmentsMatchWeekAndRoles(scheduleInputs, assignments);
 
+  // בונים תוצאת אלגוריתם מתוך השיבוצים כדי להשתמש באותן בדיקות/formatter.
   const algorithmResult = buildAlgorithmResultFromAssignments(
     scheduleInputs,
     assignments
   );
+  // board נבנה כדי להשתמש בסיכום legacy שהמסך עדיין מצפה לו.
   const board = buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
     scheduleId: persistedSchedule.scheduleId,
     publishedAt: persistedSchedule.publishedAt,
     permissionRole: user.permissionRole,
   });
+  // בדיקות ידניות: זמינות, כפילויות, תפקיד לא מתאים וכו'.
   const manualWarnings = buildManualAssignmentWarnings(scheduleInputs, assignments);
+  // בדיקות כיסוי: האם חסרים עובדים ביחס לדרישות המשמרת.
   const coverageIssues = buildCoverageIssues(
     scheduleInputs,
     algorithmResult.shiftValidationSummaries
   );
+  // בדיקות חוזק: האם כוח העובדים במשמרת עומד ביעד.
   const strengthIssues = buildStrengthIssues(
     scheduleInputs,
     algorithmResult.shiftValidationSummaries
@@ -737,6 +755,7 @@ async function validateSchedule(
     (issue) => issue.type !== "employee_not_available"
   );
   const fairnessWarnings = buildFairnessWarnings(scheduleInputs, assignments);
+  // report הוא הדוח שה-Frontend מציג בחלון בדיקת סידור.
   const report = {
     message: "Schedule validation completed",
     summary: buildValidationSummary(
@@ -758,6 +777,7 @@ async function validateSchedule(
       ...fairnessWarnings,
     ],
   };
+  // קובע אם הדוח תקין, עם אזהרות, או חסום.
   const statusResult = resolveValidationStatus(report);
 
   return {
@@ -790,8 +810,11 @@ async function clearScheduleAssignments(scheduleId, user) {
 }
 
 async function publishSchedule(scheduleId, user) {
+  // ממירים ובודקים שה-scheduleId תקין.
   const numericScheduleId = parseScheduleId(scheduleId);
+  // repository מעדכן published_at במסד.
   const publishResult = await scheduleRepository.publishSchedule(numericScheduleId);
+  // אחרי העדכון טוענים שוב נתוני שבוע ושיבוצים כדי להחזיר board מלא.
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
     publishResult.weekStartDate
   );
@@ -804,6 +827,7 @@ async function publishSchedule(scheduleId, user) {
   );
 
   return {
+    // ה-Frontend משתמש ב-board שחוזר כדי להציג מצב published.
     message: "Schedule published successfully",
     ...buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
       scheduleId: publishResult.scheduleId,
@@ -815,10 +839,12 @@ async function publishSchedule(scheduleId, user) {
 }
 
 async function unpublishSchedule(scheduleId, user) {
+  // ביטול פרסום עובד על אותו scheduleId ושומר את השיבוצים כמו שהם.
   const numericScheduleId = parseScheduleId(scheduleId);
   const unpublishResult = await scheduleRepository.unpublishSchedule(
     numericScheduleId
   );
+  // טוענים מחדש כדי להחזיר board מלא עם publishedAt = null.
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
     unpublishResult.weekStartDate
   );

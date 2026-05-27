@@ -307,6 +307,7 @@ async function createWeeklySchedule(connection, weekStartDate) {
 }
 
 async function getWeeklyScheduleByWeekStartDate(connection, weekStartDate) {
+  // מחפש את רשומת weekly_schedules של שבוע מסוים.
   const [rows] = await connection.query(
     `
       SELECT
@@ -324,6 +325,7 @@ async function getWeeklyScheduleByWeekStartDate(connection, weekStartDate) {
 }
 
 async function getWeeklyScheduleById(connection, scheduleId) {
+  // מחפש סידור לפי id, בעיקר לפרסום/שמירה/בדיקה.
   const [rows] = await connection.query(
     `
       SELECT
@@ -341,6 +343,7 @@ async function getWeeklyScheduleById(connection, scheduleId) {
 }
 
 async function getPersistedScheduleByWeek(weekStartDate) {
+  // מביא סידור שכבר נשמר לשבוע, כולל כל השיבוצים שלו.
   const weekRange = getWeekRange(weekStartDate);
   await ensureWeeklyShifts(weekRange.weekStartDate);
 
@@ -351,9 +354,11 @@ async function getPersistedScheduleByWeek(weekStartDate) {
   );
 
   if (!schedule) {
+    // אין weekly_schedule לשבוע הזה.
     return null;
   }
 
+  // assignment נשמר בטבלת schedule_assignments לפי schedule_id.
   const [assignments] = await pool.query(
     `
       SELECT
@@ -373,6 +378,7 @@ async function getPersistedScheduleByWeek(weekStartDate) {
   );
 
   return {
+    // זה המבנה שה-service מקבל לפני buildScheduleBoardResponse.
     scheduleId: schedule.id,
     weekStartDate: formatDateKey(schedule.week_start_date),
     publishedAt: formatDateTimeValue(schedule.published_at),
@@ -388,6 +394,7 @@ async function getPersistedScheduleByWeek(weekStartDate) {
 }
 
 async function ensureWeeklyScheduleByWeekStartDate(weekStartDate) {
+  // יוצר רשומת סידור ריקה אם אין כזו לשבוע.
   const weekRange = getWeekRange(weekStartDate);
   const connection = await pool.getConnection();
 
@@ -419,6 +426,7 @@ async function ensureWeeklyScheduleByWeekStartDate(weekStartDate) {
 }
 
 async function getPersistedScheduleById(scheduleId) {
+  // מוצא את השבוע לפי scheduleId ואז משתמש באותה פונקציה של שליפה לפי שבוע.
   const schedule = await getWeeklyScheduleById(pool, scheduleId);
 
   if (!schedule) {
@@ -588,8 +596,10 @@ async function publishSchedule(scheduleId) {
   const connection = await pool.getConnection();
 
   try {
+    // פרסום רץ ב-transaction כדי שהקריאה תחזור עם מצב DB עקבי.
     await connection.beginTransaction();
 
+    // קודם בודקים שהסידור קיים.
     const schedule = await getWeeklyScheduleById(connection, scheduleId);
 
     if (!schedule) {
@@ -598,6 +608,7 @@ async function publishSchedule(scheduleId) {
       throw error;
     }
 
+    // סימון published_at אומר שהסידור גלוי כפורסם.
     await connection.query(
       `
         UPDATE weekly_schedules
@@ -608,6 +619,7 @@ async function publishSchedule(scheduleId) {
       [scheduleId]
     );
 
+    // קוראים שוב את הרשומה כדי להחזיר את זמן הפרסום שנוצר במסד.
     const publishedSchedule = await getWeeklyScheduleById(connection, scheduleId);
     await connection.commit();
 
@@ -617,6 +629,7 @@ async function publishSchedule(scheduleId) {
       publishedAt: formatDateTimeValue(publishedSchedule.published_at),
     };
   } catch (error) {
+    // במקרה כשל מבטלים את כל שינוי הפרסום.
     await connection.rollback();
     throw error;
   } finally {
@@ -628,8 +641,10 @@ async function unpublishSchedule(scheduleId) {
   const connection = await pool.getConnection();
 
   try {
+    // ביטול פרסום גם רץ ב-transaction.
     await connection.beginTransaction();
 
+    // מוודאים שהסידור קיים לפני עדכון.
     const schedule = await getWeeklyScheduleById(connection, scheduleId);
 
     if (!schedule) {
@@ -638,6 +653,7 @@ async function unpublishSchedule(scheduleId) {
       throw error;
     }
 
+    // published_at = NULL אומר שהסידור כבר לא מפורסם.
     await connection.query(
       `
         UPDATE weekly_schedules
@@ -648,6 +664,7 @@ async function unpublishSchedule(scheduleId) {
       [scheduleId]
     );
 
+    // מחזירים את הסידור אחרי האיפוס.
     const unpublishedSchedule = await getWeeklyScheduleById(connection, scheduleId);
     await connection.commit();
 
@@ -657,6 +674,7 @@ async function unpublishSchedule(scheduleId) {
       publishedAt: null,
     };
   } catch (error) {
+    // אם הביטול נכשל, מחזירים את הפרסום למצב הקודם.
     await connection.rollback();
     throw error;
   } finally {

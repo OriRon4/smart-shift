@@ -9,6 +9,7 @@ const JWT_EXPIRES_IN = "8h";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function buildToken(user) {
+  // JWT מכיל מזהים והרשאה כדי לזהות את המשתמש בבקשות הבאות.
   return jwt.sign(
     {
       userId: user.id,
@@ -23,6 +24,7 @@ function buildToken(user) {
 }
 
 function sanitizeUser(user) {
+  // מחזירים ללקוח רק מידע בטוח, בלי passwordHash.
   return {
     id: user.id,
     employeeId: user.employeeId,
@@ -35,16 +37,19 @@ function sanitizeUser(user) {
 }
 
 async function login(loginValue, password) {
+  // בדיקת קלט בסיסית לפני גישה למסד.
   if (!loginValue || !password) {
     throw createHttpError(400, "login and password are required");
   }
 
+  // מחפשים משתמש לפי username או email.
   const user = await authRepository.findUserByLogin(loginValue);
 
   if (!user || !user.isActive) {
     throw createHttpError(401, "Invalid login credentials");
   }
 
+  // בודקים שהסיסמה מתאימה ל-hash ששמור במסד.
   const passwordMatches = await verifyPassword(user, password);
 
   if (!passwordMatches) {
@@ -52,6 +57,7 @@ async function login(loginValue, password) {
   }
 
   return {
+    // token חוזר ללקוח ונשמר ב-localStorage.
     token: buildToken(user),
     user: sanitizeUser(user),
   };
@@ -146,6 +152,7 @@ async function getUserByToken(token) {
   let payload;
 
   try {
+    // מפענחים את ה-JWT ומוודאים שהוא נחתם עם הסוד של השרת.
     payload = jwt.verify(token, env.jwtSecret);
   } catch {
     throw createHttpError(401, "Invalid authentication token");
@@ -157,6 +164,7 @@ async function getUserByToken(token) {
     throw createHttpError(401, "Invalid authentication token");
   }
 
+  // אחרי פענוח ה-token בודקים שהמשתמש עדיין קיים ופעיל במסד.
   const user = await authRepository.findUserById(userId);
 
   if (!user || !user.isActive) {

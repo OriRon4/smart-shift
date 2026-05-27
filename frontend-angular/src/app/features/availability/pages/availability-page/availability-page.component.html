@@ -6,6 +6,7 @@
       <p>Select the morning and evening shifts you can work this week.</p>
     </div>
 
+    <!-- שינוי שבוע מגיע מה-child ומפעיל טעינת זמינות מחדש באבא. -->
     <app-week-selector
       [weekRangeLabel]="weekRangeLabel"
       [isLoading]="isLoading"
@@ -35,6 +36,7 @@
           <span>Choose any of the 14 weekly shifts</span>
         </div>
 
+        <!-- לחיצה מפעילה submitAvailability בקומפוננטה. -->
         <button
           class="availability-page__submit"
           type="button"
@@ -54,6 +56,7 @@
             </header>
 
             @for (shift of day.shifts; track shift.shiftId) {
+              <!-- כל לחיצה מוסיפה או מסירה shiftId מה-Set המקומי. -->
               <button
                 type="button"
                 [class.availability-shift--selected]="isSelected(shift.shiftId)"

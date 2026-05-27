@@ -638,11 +638,12 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
   }
 
   protected loadSchedule(): void {
+    // טוען סידור קיים לשבוע שנבחר בלי ליצור סידור חדש.
     this.isLoading = true;
     this.errorMessage = '';
     this.actionErrorMessage = '';
     this.successMessage = '';
-    // תוצאת בדיקה קודמת כבר לא רלוונטית אחרי יצירת סידור חדש.
+    // תוצאת בדיקה קודמת כבר לא רלוונטית אחרי טעינת שבוע/סידור אחר.
     this.validationResult = null;
     this.isValidationDialogOpen = false;
     this.resetValidationExpansion();
@@ -650,8 +651,10 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     this.hasUnsavedChanges = false;
     this.showEmployeesUnderTarget = false;
 
+    // GET לשרת לפי selectedWeekStartDate; התצוגה משתמשת ב-this.board.
     this.scheduleApiService.getSchedule(this.selectedWeekStartDate).subscribe({
       next: (board) => {
+        // אם אין סידור ואין ימים להצגה, משאירים board ריק.
         this.board = board.scheduleId || board.days.length ? board : null;
         this.isLoading = false;
       },
@@ -671,6 +674,7 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     this.errorMessage = '';
     this.actionErrorMessage = '';
     this.successMessage = '';
+    // מאופס ביצירת סידור חדש כי תוצאת בדיקה קודמת כבר לא רלוונטית.
     this.validationResult = null;
 
     // קוראים ל-API עם השבוע הנבחר בלבד.
@@ -1100,6 +1104,7 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
       return;
     }
 
+    // בדיקת סידור קיימת: שולחים לשרת את השיבוצים שמופיעים כרגע במסך.
     this.isLoading = true;
     this.errorMessage = '';
     this.successMessage = '';
@@ -1108,10 +1113,12 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
       .validateSchedule(
         this.board.scheduleId,
         this.selectedWeekStartDate,
+        // flattenAssignments הופך את ה-board לרשימת assignment פשוטה לשרת.
         this.flattenAssignments(this.board),
         this.hasUnsavedChanges
       )
       .subscribe({
+        // התוצאה נשמרת ונפתחת בתיבת בדיקה במסך.
         next: (result) => {
           this.validationResult = result;
           this.isValidationDialogOpen = true;
@@ -1377,17 +1384,20 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
       return;
     }
 
+    // פרסום/ביטול פרסום פועל רק על סידור שכבר נשמר ויש לו scheduleId.
     this.isLoading = true;
     this.errorMessage = '';
     this.actionErrorMessage = '';
     this.successMessage = '';
 
+    // אם יש publishedAt מבטלים פרסום, אחרת מפרסמים.
     const publishRequest = this.board.publishedAt
       ? this.scheduleApiService.unpublishSchedule(this.board.scheduleId)
       : this.scheduleApiService.publishSchedule(this.board.scheduleId);
 
     publishRequest
       .subscribe({
+        // השרת מחזיר board מעודכן עם publishedAt חדש או null.
         next: (board) => {
           this.board = board;
           this.successMessage = board.publishedAt

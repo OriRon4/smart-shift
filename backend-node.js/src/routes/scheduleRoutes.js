@@ -13,6 +13,7 @@ const router = express.Router();
 // כל route בקובץ הזה דורש משתמש מחובר.
 router.use(requireAuth);
 
+// צפייה בסידור: מחזירה board קיים לשבוע לפי weekStartDate.
 router.get("/", scheduleController.getSchedule);
 // Generate דורש גם הרשאת manager, ואז עובר ל-controller.
 router.post("/generate", requireManager, scheduleController.generateSchedule);
@@ -22,8 +23,10 @@ router.patch("/shifts/:shiftId/requirements", requireManager, scheduleController
 router.post("/shifts/:shiftId/finish", requireManagerOrShiftLeader, scheduleController.finishShift);
 router.patch("/:scheduleId/assignments", requireManagerOrShiftLeader, scheduleController.saveAssignments);
 router.delete("/:scheduleId/assignments", requireManager, scheduleController.clearScheduleAssignments);
+// פרסום וביטול פרסום דורשים manager ומעדכנים published_at.
 router.post("/:scheduleId/publish", requireManager, scheduleController.publishSchedule);
 router.delete("/:scheduleId/publish", requireManager, scheduleController.unpublishSchedule);
+// בדיקת סידור דורשת manager ומחזירה דוח בעיות/אזהרות.
 router.post("/:scheduleId/validate", requireManager, scheduleController.validateSchedule);
 
 module.exports = router;

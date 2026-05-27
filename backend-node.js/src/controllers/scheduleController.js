@@ -2,7 +2,9 @@ const scheduleService = require("../services/scheduleService");
 
 async function getSchedule(req, res, next) {
   try {
+    // צפייה בסידור מקבלת weekStartDate מה-query.
     const { weekStartDate } = req.query || {};
+    // ה-service מביא סידור שמור ומעצב אותו ל-board.
     const schedule = await scheduleService.getScheduleForWeek(
       weekStartDate,
       req.user
@@ -52,6 +54,7 @@ async function saveAssignments(req, res, next) {
 
 async function validateSchedule(req, res, next) {
   try {
+    // בדיקה מקבלת scheduleId מה-URL ואת השיבוצים הנוכחיים מה-body.
     const { weekStartDate, assignments, hasUnsavedChanges } = req.body || {};
     const validationResult = await scheduleService.validateSchedule(
       req.params.scheduleId,
@@ -61,6 +64,7 @@ async function validateSchedule(req, res, next) {
       req.user
     );
 
+    // מחזירים ל-Frontend דוח בדיקה לפתיחת dialog.
     res.status(200).json(validationResult);
   } catch (error) {
     next(error);
@@ -82,6 +86,7 @@ async function clearScheduleAssignments(req, res, next) {
 
 async function publishSchedule(req, res, next) {
   try {
+    // פרסום עובד לפי scheduleId ומחזיר board מעודכן.
     const publishedSchedule = await scheduleService.publishSchedule(
       req.params.scheduleId,
       req.user
@@ -95,6 +100,7 @@ async function publishSchedule(req, res, next) {
 
 async function unpublishSchedule(req, res, next) {
   try {
+    // ביטול פרסום מאפס publishedAt ומחזיר board מעודכן.
     const unpublishedSchedule = await scheduleService.unpublishSchedule(
       req.params.scheduleId,
       req.user

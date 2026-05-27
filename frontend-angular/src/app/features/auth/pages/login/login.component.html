@@ -54,6 +54,7 @@
       </div>
 
       @if (!isRegisterMode) {
+        <!-- שליחת הטופס מפעילה את submit בקומפוננטה, לא קוראת לשרת ישירות. -->
         <form class="login-form" (submit)="$event.preventDefault(); submit()">
           <label>
             Username or email
@@ -83,6 +84,7 @@
             <p class="login-form__error">{{ errorMessage }}</p>
           }
 
+          <!-- הכפתור רק שולח את הטופס; הלוגיקה נמצאת ב-login.component.ts. -->
           <button type="submit" [disabled]="isLoading">
             {{ isLoading ? 'Logging in...' : 'Log in' }}
           </button>
