@@ -46,12 +46,15 @@ import {
   styleUrl: './schedule-board.component.css'
 })
 export class ScheduleBoardComponent implements OnDestroy, OnInit {
+  // השבוע שעליו עובדים כרגע. הערך הזה נשלח לשרת ביצירת סידור.
   protected selectedWeekStartDate = getCurrentWeekStartDate();
+  // זה ה-board שהתצוגה משתמשת בו כדי להציג את הסידור.
   protected board: ScheduleBoardResponse | null = null;
   protected employees: Employee[] = [];
   protected availableShiftIdsByEmployeeId = new Map<number, Set<number>>();
   protected pendingReplacement: ReplaceAssignmentRequest | null = null;
   protected replacementSearch = '';
+  // תוצאת בדיקת הסידור האחרונה, אם הופעלה. מאופסת ביצירת סידור חדש.
   protected validationResult: ScheduleValidationResponse | null = null;
   protected isValidationDialogOpen = false;
   protected isBlockingIssuesExpanded = false;
@@ -64,6 +67,7 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     date: string;
   } | null = null;
   protected finishShiftFeedback: FinishShiftFeedback = this.createDefaultFinishShiftFeedback();
+  // מצבי מסך: טעינה, שגיאה כללית, שגיאת פעולה והודעת הצלחה.
   protected isLoading = false;
   protected errorMessage = '';
   protected actionErrorMessage = '';
@@ -638,6 +642,7 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     this.errorMessage = '';
     this.actionErrorMessage = '';
     this.successMessage = '';
+    // תוצאת בדיקה קודמת כבר לא רלוונטית אחרי יצירת סידור חדש.
     this.validationResult = null;
     this.isValidationDialogOpen = false;
     this.resetValidationExpansion();
@@ -657,16 +662,22 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     });
   }
 
+  //x
+
+  // מופעל כשהאבא מקבל אירוע generateSchedule מה-week-selector.
   protected generateSchedule(): void {
+    // מנקים מצב קודם ומפעילים טעינה לפני הקריאה לשרת.
     this.isLoading = true;
     this.errorMessage = '';
     this.actionErrorMessage = '';
     this.successMessage = '';
     this.validationResult = null;
 
+    // קוראים ל-API עם השבוע הנבחר בלבד.
     this.scheduleApiService
       .generateSchedule(this.selectedWeekStartDate)
       .subscribe({
+        // בהצלחה: שומרים את ה-board שחזר מהשרת לתצוגה.
         next: (board) => {
           this.board = board;
           this.successMessage = 'Schedule generated.';
@@ -674,12 +685,15 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
           this.showEmployeesUnderTarget = false;
           this.isLoading = false;
         },
+        // בשגיאה: שומרים הודעה שהמסך יציג למשתמש.
         error: (error: unknown) => {
           this.errorMessage = this.resolveErrorMessage(error);
           this.isLoading = false;
         }
       });
   }
+
+  //x
 
   protected openReplacement(request: ReplaceAssignmentRequest): void {
     if (!this.canReplaceScheduleWorkers()) {

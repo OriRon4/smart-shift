@@ -10,12 +10,15 @@ import { ScheduleBoardComponent } from './features/schedule/pages/schedule-board
 
 export const routes: Routes = [
   {
+    //כאשר הכתובת היא: /login Angular מציג: LoginComponent
     path: 'login',
-    component: LoginComponent
+    component: LoginComponent       
   },
   {
+    //כל route שנמצא תחת path ריק יוצג בתוך AppLayoutComponent ורק אם authGuard מאשר
+    //AppComponent מציג את ה־route הראשי AppLayoutComponent מציג את child route
     path: '',
-    component: AppLayoutComponent,
+    component: AppLayoutComponent,      //כל המסכים הפנימיים נטענים בתוך layout.
     canActivate: [authGuard],
     children: [
       {

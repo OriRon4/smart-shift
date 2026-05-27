@@ -15,16 +15,20 @@ import {
   providedIn: 'root'
 })
 export class ScheduleApiService {
+  // כתובת הבסיס לכל קריאות ה-schedule בשרת.
   private readonly apiUrl = `${environment.apiBaseUrl}/schedules`;
 
+  // HttpClient מבצע את קריאות ה-HTTP בפועל.
   constructor(private readonly http: HttpClient) {}
 
   getSchedule(weekStartDate: string): Observable<ScheduleBoardResponse> {
     const params = new HttpParams().set('weekStartDate', weekStartDate);
     return this.http.get<ScheduleBoardResponse>(this.apiUrl, { params });
   }
-
+  
+  // יוצר סידור לשבוע: הקומפוננטה עושה subscribe לתוצאה.
   generateSchedule(weekStartDate: string): Observable<ScheduleBoardResponse> {
+    // נשלח POST אל /api/schedules/generate עם weekStartDate בלבד.
     return this.http.post<ScheduleBoardResponse>(`${this.apiUrl}/generate`, {
       weekStartDate
     });

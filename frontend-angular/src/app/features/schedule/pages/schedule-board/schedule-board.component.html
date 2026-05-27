@@ -7,6 +7,10 @@
         <p>Plan, review, and save the weekly schedule.</p>
       </div>
 
+      //x
+      <!-- [] מעביר נתונים מהאבא לילד. -->
+      <!-- () מאזין לאירועים שהילד משדר החוצה. -->
+      <!-- generateSchedule מהילד מפעיל כאן את generateSchedule() באבא. -->
       <app-week-selector
         [weekRangeLabel]="weekRangeLabel"
         [isLoading]="isLoading"
@@ -16,6 +20,7 @@
         (generateSchedule)="generateSchedule()"
       />
     </section>
+      //x
 
     <section class="schedule-command-bar">
       <div>

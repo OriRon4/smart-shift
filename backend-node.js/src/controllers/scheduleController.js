@@ -16,14 +16,19 @@ async function getSchedule(req, res, next) {
 
 async function generateSchedule(req, res, next) {
   try {
+    // ה-controller מקבל את השבוע מהבקשה שהגיעה מה-Frontend.
     const { weekStartDate } = req.body || {};
+
+    // מעביר את העבודה העסקית ל-service: יצירת סידור, שמירה ובניית תשובה.
     const generatedSchedule = await scheduleService.generateScheduleForWeek(
       weekStartDate,
       req.user
     );
 
+    // מחזיר ל-Frontend את ה-board החדש שנוצר.
     res.status(201).json(generatedSchedule);
   } catch (error) {
+    // כל שגיאה עוברת ל-error middleware המרכזי ב-app.js.
     next(error);
   }
 }

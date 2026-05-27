@@ -257,7 +257,10 @@ async function getPerformanceLogsByWeek(weekStartDate) {
 }
 
 async function getScheduleInputsByWeek(weekStartDate) {
+  // מחשבים את תחילת וסוף השבוע לפי התאריך שהגיע מה-Frontend.
   const weekRange = getWeekRange(weekStartDate);
+
+  // מביאים במקביל את כל הנתונים הדרושים לאלגוריתם.
   const [
     employees,
     allEmployees,
@@ -265,13 +268,19 @@ async function getScheduleInputsByWeek(weekStartDate) {
     shiftRequests,
     performanceLogs,
   ] = await Promise.all([
+    // עובדים פעילים שרלוונטיים לשיבוץ.
     getActiveScheduleEmployees(),
+    // כל העובדים, גם לצורך חישוב חוזק ושמירת שיבוצים קיימים.
     getAllEmployees(),
+    // משמרות השבוע; אם חסרות משמרות, הפונקציה יוצרת אותן.
     ensureWeeklyShifts(weekRange.weekStartDate),
+    // זמינות עובדים לשבוע הזה.
     getShiftRequestsByWeek(weekRange.weekStartDate),
+    // פידבקים קודמים למשמרות, בעיקר להצגה/ML.
     getPerformanceLogsByWeek(weekRange.weekStartDate),
   ]);
 
+  // זה האובייקט שנשלח ל-generateScheduleAlgorithm.
   return {
     weekStartDate: weekRange.weekStartDate,
     weekEndDate: weekRange.weekEndDate,
@@ -485,30 +494,37 @@ async function saveScheduleAssignments(weekStartDate, assignments, options = {})
   const connection = await pool.getConnection();
 
   try {
+    // Transaction מוודא שמחיקה והכנסה של שיבוצים יקרו יחד.
     await connection.beginTransaction();
 
+    // בודקים אם כבר קיים סידור לשבוע הזה.
     const existingSchedule = await getWeeklyScheduleByWeekStartDate(
       connection,
       weekRange.weekStartDate
     );
 
+    // אם אין סידור, יוצרים weekly_schedule חדש; אם יש, משתמשים בו.
     const scheduleId = existingSchedule
       ? existingSchedule.id
       : await createWeeklySchedule(connection, weekRange.weekStartDate);
 
     if (existingSchedule) {
+      // יצירה מחדש מחליפה את השיבוצים הישנים של אותו שבוע.
       await deleteScheduleAssignmentsByScheduleId(connection, scheduleId);
+      // נגיעה בסידור מעדכנת updated_at ובדרך כלל מבטלת פרסום קודם.
       await touchWeeklySchedule(connection, scheduleId, {
         clearPublished: !options.preservePublished,
       });
     }
 
+    // מכניסים את כל השיבוצים החדשים לטבלת schedule_assignments.
     const savedAssignmentCount = await insertScheduleAssignments(
       connection,
       scheduleId,
       assignments
     );
 
+    // אם הכל הצליח, מאשרים את כל השינויים.
     await connection.commit();
 
     return {
@@ -559,9 +575,11 @@ async function clearScheduleAssignments(scheduleId) {
       deletedAssignmentCount,
     };
   } catch (error) {
+    // אם משהו נכשל, מחזירים את ה-DB למצב הקודם.
     await connection.rollback();
     throw error;
   } finally {
+    // משחררים את החיבור בכל מצב.
     connection.release();
   }
 }

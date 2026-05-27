@@ -18,8 +18,10 @@ function roundScore(value) {
 }
 
 function buildPersistedAssignments(employees, assignments) {
+  // Map: employee.id -> אובייקט עובד, כדי למצוא חוזק לפי employeeId.
   const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
 
+  // האלגוריתם מחזיר shiftId/employeeId/jobRole; לשמירה מוסיפים assignedStrengthScore.
   return assignments.map((assignment) => {
     const employee = employeeById.get(assignment.employeeId);
 
@@ -177,14 +179,21 @@ async function getScheduleForWeek(weekStartDate, user) {
 }
 
 async function generateScheduleForWeek(weekStartDate, user) {
+  // שלב 1: מביאים מה-DB את כל הקלטים שהאלגוריתם צריך לשבוע הזה.
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
     weekStartDate
   );
+
+  // שלב 2: מריצים את אלגוריתם השיבוץ על הקלטים.
   const algorithmResult = generateScheduleAlgorithm(scheduleInputs);
+
+  // שלב 3: מכינים את השיבוצים למבנה שנשמר בטבלת schedule_assignments.
   const persistedAssignments = buildPersistedAssignments(
     scheduleInputs.allEmployees || scheduleInputs.employees,
     algorithmResult.allAssignments
   );
+
+  // שלב 4: שומרים את השיבוצים החדשים ב-DB ומקבלים scheduleId.
   const persistenceResult = await scheduleRepository.saveScheduleAssignments(
     scheduleInputs.weekStartDate,
     persistedAssignments
@@ -192,6 +201,7 @@ async function generateScheduleForWeek(weekStartDate, user) {
 
   return {
     message: "Schedule generated successfully",
+    // שלב 5: ה-formatter הופך את תוצאת האלגוריתם למבנה שהמסך יודע להציג.
     ...buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
       scheduleId: persistenceResult.scheduleId,
       publishedAt: persistenceResult.publishedAt,
