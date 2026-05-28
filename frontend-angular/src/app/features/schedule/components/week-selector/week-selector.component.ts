@@ -23,5 +23,4 @@ export class WeekSelectorComponent {
   @Output() generateSchedule = new EventEmitter<void>();
 
 
-  //x
 }

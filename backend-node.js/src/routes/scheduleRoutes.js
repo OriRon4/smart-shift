@@ -1,4 +1,3 @@
-//x
 const express = require("express");
 const scheduleController = require("../controllers/scheduleController");
 const {
@@ -30,4 +29,3 @@ router.delete("/:scheduleId/publish", requireManager, scheduleController.unpubli
 router.post("/:scheduleId/validate", requireManager, scheduleController.validateSchedule);
 
 module.exports = router;
-//x

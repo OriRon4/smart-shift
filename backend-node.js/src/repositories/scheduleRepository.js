@@ -64,7 +64,7 @@ async function ensureWeeklyShifts(weekStartDate) {
   if (missingValues.length) {
     await pool.query(
       `
-        INSERT INTO shifts (
+        INSERT IGNORE INTO shifts (
           shift_date,
           shift_type,
           required_waiters,

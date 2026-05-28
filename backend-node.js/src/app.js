@@ -1,4 +1,3 @@
-//x
 const express = require("express");
 const authRoutes = require("./routes/authRoutes");
 const availabilityRoutes = require("./routes/availabilityRoutes");
@@ -65,4 +64,3 @@ app.use((error, req, res, next) => {
 });
 
 module.exports = app;
-//x

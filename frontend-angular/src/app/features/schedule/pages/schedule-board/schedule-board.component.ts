@@ -665,7 +665,6 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     });
   }
 
-  //x
 
   // מופעל כשהאבא מקבל אירוע generateSchedule מה-week-selector.
   protected generateSchedule(): void {
@@ -697,7 +696,6 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
       });
   }
 
-  //x
 
   protected openReplacement(request: ReplaceAssignmentRequest): void {
     if (!this.canReplaceScheduleWorkers()) {

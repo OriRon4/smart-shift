@@ -24,7 +24,6 @@ async function requireAuth(req, res, next) {
   }
 }
 
-//x
 // בודק שלמשתמש המאומת יש הרשאת manager.
 function requireManager(req, res, next) {
   if (req.user?.permissionRole !== PERMISSION_ROLES.MANAGER) {
@@ -50,7 +49,6 @@ function requireManagerOrShiftLeader(req, res, next) {
 
   next();
 }
-//x
 
 module.exports = {
   requireAuth,
