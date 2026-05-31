@@ -36,6 +36,25 @@ function getWeekRange(weekStartDate) {
   };
 }
 
+function getCurrentWeekStartDate(referenceDate = new Date()) {
+  const startDate = new Date(referenceDate);
+  startDate.setHours(0, 0, 0, 0);
+  startDate.setDate(startDate.getDate() - startDate.getDay());
+
+  return formatDateKey(startDate);
+}
+
+function getNextWeekStartDate(referenceDate = new Date()) {
+  const currentWeekStartDate = new Date(
+    `${getCurrentWeekStartDate(referenceDate)}T00:00:00`
+  );
+  currentWeekStartDate.setDate(currentWeekStartDate.getDate() + 7);
+
+  return formatDateKey(currentWeekStartDate);
+}
+
 module.exports = {
   getWeekRange,
+  getCurrentWeekStartDate,
+  getNextWeekStartDate,
 };

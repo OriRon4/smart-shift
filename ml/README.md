@@ -2,18 +2,18 @@
 
 This folder is reserved for the final Smart-Shift machine learning workflow.
 
-The ML component predicts shift demand requirements before the scheduling
-algorithm runs. It does not assign employees to shifts.
+The ML component predicts shift requirement recommendations before the
+scheduling algorithm runs. It does not assign employees to shifts.
 
-The planned prediction outputs are:
+The prediction outputs are:
 
 - `recommended_waiters`
 - `recommended_strength_score`
 
 The existing heuristic scheduling algorithm remains the core scheduling engine.
-ML recommendations will later be reviewed by a manager and applied to the
-existing `shifts.required_waiters` and `shifts.required_strength_score` fields
-only after approval.
+ML recommendations are reviewed by a manager and applied to the existing
+`shifts.required_waiters` and `shifts.required_strength_score` fields only
+after approval.
 
 ## Data Strategy
 
@@ -24,6 +24,12 @@ production restaurant data.
 In a real deployment, managers would record actual shift performance after each
 shift. Those logs would gradually replace or improve the demo data used for
 training.
+
+`manager_rating` is stored as post-shift historical feedback. It is not used as
+a prediction feature because it is not known before creating a future schedule.
+`expected_customer_load` means a pre-shift forecasted customer count.
+The seed rows use shift-level customer counts and include small manager-like
+variation so similar shifts do not always produce identical requirements.
 
 ## Setup
 
@@ -52,7 +58,6 @@ The training script uses these features:
 - `shift_type`
 - `is_weekend`
 - `expected_customer_load`
-- `manager_rating`
 
 It creates:
 
@@ -68,7 +73,7 @@ names, target names, and test metrics.
 Predict one shift directly from CLI arguments:
 
 ```bash
-python ml/predict_shift_requirements.py --shift-id 1 --day-of-week 5 --shift-type evening --is-weekend --expected-customer-load 230 --manager-rating 8.4
+python ml/predict_shift_requirements.py --shift-id 1 --day-of-week 5 --shift-type evening --is-weekend --expected-customer-load 230
 ```
 
 Or pass a JSON file:
@@ -84,7 +89,7 @@ The prediction output includes:
 - `recommended_strength_score`
 - `model_version`
 
-## Planned Workflow
+## Workflow
 
 1. Read historical shift performance data.
 2. Train a model for recommended waiter demand.
@@ -93,6 +98,3 @@ The prediction output includes:
 5. Generate recommendations for existing shifts.
 6. Store recommendations in `shift_ml_predictions`.
 7. Let the manager review and apply recommendations in the app.
-
-Stage 1 only creates the folder structure and database foundation. It does not
-connect ML predictions to the backend or frontend yet.

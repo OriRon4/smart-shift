@@ -18,8 +18,7 @@ async function getPerformanceAverages() {
       SELECT
         day_of_week,
         shift_type,
-        AVG(expected_customer_load) AS expected_customer_load,
-        AVG(manager_rating) AS manager_rating
+        AVG(expected_customer_load) AS expected_customer_load
       FROM shift_performance_logs
       GROUP BY day_of_week, shift_type
     `
@@ -28,8 +27,7 @@ async function getPerformanceAverages() {
     `
       SELECT
         shift_type,
-        AVG(expected_customer_load) AS expected_customer_load,
-        AVG(manager_rating) AS manager_rating
+        AVG(expected_customer_load) AS expected_customer_load
       FROM shift_performance_logs
       GROUP BY shift_type
     `
@@ -37,8 +35,7 @@ async function getPerformanceAverages() {
   const [overallRows] = await pool.query(
     `
       SELECT
-        AVG(expected_customer_load) AS expected_customer_load,
-        AVG(manager_rating) AS manager_rating
+        AVG(expected_customer_load) AS expected_customer_load
       FROM shift_performance_logs
     `
   );

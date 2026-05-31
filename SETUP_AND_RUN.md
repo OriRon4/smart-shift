@@ -174,7 +174,7 @@ python ml/train_shift_requirements_model.py
 בדיקת תחזית ידנית:
 
 ```powershell
-python ml/predict_shift_requirements.py --shift-id 1 --day-of-week 5 --shift-type evening --is-weekend --expected-customer-load 230 --manager-rating 8.4
+python ml/predict_shift_requirements.py --shift-id 1 --day-of-week 5 --shift-type evening --is-weekend --expected-customer-load 230
 ```
 
 אם מתקבלת תשובת JSON עם `recommended_waiters` ו-`recommended_strength_score`, ה-ML עובד.

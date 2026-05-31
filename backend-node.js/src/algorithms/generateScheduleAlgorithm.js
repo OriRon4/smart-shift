@@ -1,4 +1,11 @@
 const { SCHEDULE_JOB_ROLES } = require("../constants/roles");
+const { runScheduleImprovement } = require("./scheduleImprovement");
+
+const ENABLE_SCHEDULE_IMPROVEMENT = true;
+
+function getAssignmentKey(assignment) {
+  return `${assignment.shiftId}:${assignment.employeeId}:${assignment.jobRole}`;
+}
 
 // מחשב ציון ותק בסקאלה של 0 עד 10.
 // אחרי 24 חודשי ותק העובד מקבל את מלוא ציון הוותק.
@@ -496,455 +503,6 @@ function buildRoleValidationSummaries(shifts, assignments, employees) {
   );
 }
 
-/*
-שלב שיפור הסידור בהחלפות הושבת כרגע.
-הקוד נשמר כאן כהערה בלבד, כדי שלא יהיה חלק מהזרימה במגן.
-הסידור עדיין נוצר לפי assignRole, ואז נבדק עם buildRoleValidationSummaries.
-
-function buildShiftById(shifts) {
-  // Map: shift.id -> אובייקט המשמרת.
-  return new Map(shifts.map((shift) => [shift.id, shift]));
-}
-
-function buildAvailabilitySet(shiftRequests) {
-  // Set: "employee_id:shift_id" -> קיים אם העובד זמין למשמרת.
-  return new Set(
-    shiftRequests.map(
-      (shiftRequest) => `${shiftRequest.employee_id}:${shiftRequest.shift_id}`
-    )
-  );
-}
-
-function buildEmployeeById(employees) {
-  // Map: employee.id -> אובייקט העובד.
-  return new Map(employees.map((employee) => [employee.id, employee]));
-}
-
-function findSameDayDoubleShiftIssues(assignments, shifts) {
-  // Map: shift.id -> אובייקט המשמרת, כדי למצוא תאריך לפי shiftId.
-  const shiftById = buildShiftById(shifts);
-  // Map: "employeeId:date" -> מערך שיבוצים של העובד באותו יום.
-  const assignmentsByEmployeeAndDate = new Map();
-
-  for (const assignment of assignments) {
-    const shift = shiftById.get(assignment.shiftId);
-
-    if (!shift) {
-      continue;
-    }
-
-    const dateKey = formatDateKey(shift.shift_date);
-    const key = `${assignment.employeeId}:${dateKey}`;
-    const existingAssignments = assignmentsByEmployeeAndDate.get(key) || [];
-
-    existingAssignments.push(assignment);
-    assignmentsByEmployeeAndDate.set(key, existingAssignments);
-  }
-
-  return [...assignmentsByEmployeeAndDate.entries()].flatMap(
-    ([key, dayAssignments]) => {
-      // אם לעובד יש שיבוץ אחד בלבד באותו יום, אין בעיה.
-      if (dayAssignments.length <= 1) {
-        return [];
-      }
-
-      const [employeeId, date] = key.split(":");
-
-      return [
-        {
-          // בעיה זו מסמנת עובד ששובץ ליותר ממשמרת אחת באותו יום.
-          type: "same_day_double_shift",
-          employeeId: Number(employeeId),
-          date,
-          assignmentCount: dayAssignments.length,
-          extraAssignments: dayAssignments.length - 1,
-          shiftIds: dayAssignments.map((assignment) => assignment.shiftId),
-        },
-      ];
-    }
-  );
-}
-
-function findFairnessIssues(scheduleInputs, assignments) {
-  // Map: employee.id -> מצב עובד כולל יעד, שיבוצים ופער הוגנות.
-  const employeeStateById = buildEmployeeStateById(
-    scheduleInputs.employees,
-    scheduleInputs.shiftRequests,
-    assignments
-  );
-
-  return [...employeeStateById.values()]
-    .map((employeeState) => {
-      // gap חיובי אומר שהעובד קיבל פחות מהיעד המחושב שלו.
-      const gap = calculateFairnessGap(
-        employeeState.targetShifts,
-        employeeState.assignedShifts
-      );
-
-      return {
-        type: "employee_under_target",
-        employeeId: employeeState.employeeId,
-        requestedShifts: employeeState.requestedShifts,
-        assignedShifts: employeeState.assignedShifts,
-        targetShifts: roundScore(employeeState.targetShifts),
-        gap: roundScore(gap),
-      };
-    })
-    // מציגים רק פער משמעותי, כדי לא להציף באזהרות קטנות.
-    .filter((issue) => issue.requestedShifts > 0 && issue.gap > 0.5);
-}
-
-function findScheduleIssues(scheduleInputs, assignments) {
-  // סיכום בסיסי לכל משמרת ותפקיד: דרישה, שיבוץ, חוזק וחוסרים.
-  const validationSummaries = buildRoleValidationSummaries(
-    scheduleInputs.shifts,
-    assignments,
-    scheduleInputs.employees
-  );
-  // קבוצות תפקיד שבהן חסרים עובדים.
-  const uncoveredRoleGroups = validationSummaries
-    .filter((summary) => summary.uncoveredSlots > 0)
-    .map((summary) => ({
-      type: "uncovered_role_group",
-      shiftId: summary.shiftId,
-      jobRole: summary.jobRole,
-      uncoveredSlots: summary.uncoveredSlots,
-    }));
-  // קבוצות תפקיד שבהן החוזק ששובץ נמוך מהיעד.
-  const belowStrengthRoleGroups = validationSummaries
-    .filter((summary) => !summary.meetsStrengthTarget)
-    .map((summary) => ({
-      type: "below_strength_target",
-      shiftId: summary.shiftId,
-      jobRole: summary.jobRole,
-      assignedStrengthScore: roundScore(summary.assignedStrengthScore),
-      requiredStrengthScore: roundScore(summary.requiredStrengthScore),
-      strengthDeficit: roundScore(
-        Math.max(
-          0,
-          Number(summary.requiredStrengthScore) -
-            Number(summary.assignedStrengthScore)
-        )
-      ),
-    }));
-  // בעיות של אותו עובד ביותר ממשמרת אחת באותו יום.
-  const sameDayDoubleShifts = findSameDayDoubleShiftIssues(
-    assignments,
-    scheduleInputs.shifts
-  );
-  // אזהרות הוגנות לעובדים שקיבלו פחות מהיעד.
-  const employeesUnderTarget = findFairnessIssues(scheduleInputs, assignments);
-
-  return {
-    // אובייקט בעיות מלא, כולל ספירות לשימוש בציון ובדוחות.
-    uncoveredRoleGroups,
-    belowStrengthRoleGroups,
-    sameDayDoubleShifts,
-    employeesUnderTarget,
-    counts: {
-      uncoveredRoleGroups: uncoveredRoleGroups.length,
-      belowStrengthRoleGroups: belowStrengthRoleGroups.length,
-      sameDayDoubleShifts: sameDayDoubleShifts.length,
-      employeesUnderTarget: employeesUnderTarget.length,
-    },
-  };
-}
-
-function scoreSchedule(scheduleInputs, assignments) {
-  // קודם מוצאים את כל סוגי הבעיות בסידור.
-  const issues = findScheduleIssues(scheduleInputs, assignments);
-  // חוסר בעובדים הוא הבעיה החמורה ביותר.
-  const uncoveredSlots = issues.uncoveredRoleGroups.reduce(
-    (total, issue) => total + issue.uncoveredSlots,
-    0
-  );
-  // סך פערי החוזק בכל קבוצות התפקיד.
-  const strengthDeficit = issues.belowStrengthRoleGroups.reduce(
-    (total, issue) => total + issue.strengthDeficit,
-    0
-  );
-  // כמות שיבוצים עודפים באותו יום.
-  const sameDayPenaltyCount = issues.sameDayDoubleShifts.reduce(
-    (total, issue) => total + issue.extraAssignments,
-    0
-  );
-  // סך פערי ההוגנות.
-  const fairnessGap = issues.employeesUnderTarget.reduce(
-    (total, issue) => total + issue.gap,
-    0
-  );
-  // ציון נמוך יותר הוא טוב יותר; חוסר עובדים מקבל קנס גדול במיוחד.
-  const totalScore =
-    uncoveredSlots * 1000 +
-    strengthDeficit * 10 +
-    sameDayPenaltyCount * 0.1 +
-    fairnessGap * 2;
-
-  return {
-    totalScore: roundScore(totalScore),
-    uncoveredSlots,
-    strengthDeficit: roundScore(strengthDeficit),
-    sameDayPenaltyCount,
-    fairnessGap: roundScore(fairnessGap),
-  };
-}
-
-function createsDuplicateShiftAssignment(assignments, assignmentIndex, swap) {
-  const assignment = assignments[assignmentIndex];
-  // swap הוא Map: assignmentIndex -> shiftId חדש אחרי החלפה.
-  const targetShiftId = swap.get(assignmentIndex) || assignment.shiftId;
-
-  return assignments.some((otherAssignment, otherIndex) => {
-    if (otherIndex === assignmentIndex) {
-      return false;
-    }
-
-    const otherTargetShiftId =
-      swap.get(otherIndex) || otherAssignment.shiftId;
-
-    // בודקים שלא נוצר מצב שבו אותו עובד מופיע פעמיים באותה משמרת.
-    return (
-      otherTargetShiftId === targetShiftId &&
-      otherAssignment.employeeId === assignment.employeeId
-    );
-  });
-}
-
-function isValidSameRoleSwap(
-  scheduleInputs,
-  assignments,
-  leftIndex,
-  rightIndex,
-  availabilitySet,
-  employeeById
-) {
-  const leftAssignment = assignments[leftIndex];
-  const rightAssignment = assignments[rightIndex];
-
-  // החלפה חוקית רק בין אותו תפקיד, ורק אם מדובר בשתי משמרות שונות.
-  if (
-    leftAssignment.jobRole !== rightAssignment.jobRole ||
-    leftAssignment.shiftId === rightAssignment.shiftId
-  ) {
-    return false;
-  }
-
-  const leftEmployee = employeeById.get(leftAssignment.employeeId);
-  const rightEmployee = employeeById.get(rightAssignment.employeeId);
-
-  // שני העובדים חייבים להיות קיימים, פעילים, ובאותו תפקיד של השיבוץ.
-  if (
-    !leftEmployee ||
-    !rightEmployee ||
-    !leftEmployee.is_active ||
-    !rightEmployee.is_active ||
-    leftEmployee.role !== leftAssignment.jobRole ||
-    rightEmployee.role !== rightAssignment.jobRole
-  ) {
-    return false;
-  }
-
-  // availabilitySet הוא Set: "employeeId:shiftId" -> העובד זמין למשמרת.
-  if (
-    !availabilitySet.has(
-      `${leftAssignment.employeeId}:${rightAssignment.shiftId}`
-    ) ||
-    !availabilitySet.has(
-      `${rightAssignment.employeeId}:${leftAssignment.shiftId}`
-    )
-  ) {
-    return false;
-  }
-
-  // Map: assignmentIndex -> shiftId החדש לאחר החלפה בין שני השיבוצים.
-  const swap = new Map([
-    [leftIndex, rightAssignment.shiftId],
-    [rightIndex, leftAssignment.shiftId],
-  ]);
-
-  return (
-    // גם אחרי ההחלפה אסור ליצור כפילות של עובד באותה משמרת.
-    !createsDuplicateShiftAssignment(assignments, leftIndex, swap) &&
-    !createsDuplicateShiftAssignment(assignments, rightIndex, swap)
-  );
-}
-
-function swapAssignmentShiftIds(assignments, leftIndex, rightIndex) {
-  // יוצרים עותק כדי לא לשנות את מערך השיבוצים המקורי.
-  const improvedAssignments = assignments.map((assignment) => ({
-    ...assignment,
-  }));
-  // מחליפים רק את shiftId בין שני שיבוצים.
-  const leftShiftId = improvedAssignments[leftIndex].shiftId;
-
-  improvedAssignments[leftIndex].shiftId =
-    improvedAssignments[rightIndex].shiftId;
-  improvedAssignments[rightIndex].shiftId = leftShiftId;
-
-  return improvedAssignments;
-}
-
-function tryImproveBySameRoleSwaps(scheduleInputs, assignments, currentScore) {
-  // Set: "employee_id:shift_id" -> קיים אם העובד זמין למשמרת.
-  const availabilitySet = buildAvailabilitySet(scheduleInputs.shiftRequests);
-  // Map: employee.id -> אובייקט העובד.
-  const employeeById = buildEmployeeById(scheduleInputs.employees);
-  // נשמרת ההחלפה החוקית שנותנת את השיפור הכי טוב.
-  let bestImprovement = null;
-  let rejectedSwaps = 0;
-
-  // עוברים על כל זוג אפשרי של שיבוצים.
-  for (let leftIndex = 0; leftIndex < assignments.length; leftIndex += 1) {
-    for (
-      let rightIndex = leftIndex + 1;
-      rightIndex < assignments.length;
-      rightIndex += 1
-    ) {
-      if (
-        // דוחים החלפה אם היא לא חוקית מבחינת תפקיד, זמינות או כפילות.
-        !isValidSameRoleSwap(
-          scheduleInputs,
-          assignments,
-          leftIndex,
-          rightIndex,
-          availabilitySet,
-          employeeById
-        )
-      ) {
-        rejectedSwaps += 1;
-        continue;
-      }
-
-      // יוצרים מועמד חדש: אותו סידור, אבל עם החלפת משמרות בין שני עובדים.
-      const candidateAssignments = swapAssignmentShiftIds(
-        assignments,
-        leftIndex,
-        rightIndex
-      );
-      // מחשבים ציון לסידור המועמד.
-      const candidateScore = scoreSchedule(
-        scheduleInputs,
-        candidateAssignments
-      );
-
-      // מקבלים רק החלפה שמשפרת את הציון הכולל.
-      if (candidateScore.totalScore >= currentScore.totalScore) {
-        rejectedSwaps += 1;
-        continue;
-      }
-
-      if (
-        // אם זו ההחלפה הכי טובה עד עכשיו, שומרים אותה.
-        !bestImprovement ||
-        candidateScore.totalScore < bestImprovement.score.totalScore
-      ) {
-        bestImprovement = {
-          assignments: candidateAssignments,
-          score: candidateScore,
-          swap: {
-            leftEmployeeId: assignments[leftIndex].employeeId,
-            rightEmployeeId: assignments[rightIndex].employeeId,
-            jobRole: assignments[leftIndex].jobRole,
-            leftFromShiftId: assignments[leftIndex].shiftId,
-            leftToShiftId: assignments[rightIndex].shiftId,
-            rightFromShiftId: assignments[rightIndex].shiftId,
-            rightToShiftId: assignments[leftIndex].shiftId,
-          },
-        };
-      }
-    }
-  }
-
-  return {
-    bestImprovement,
-    rejectedSwaps,
-  };
-}
-
-function improveScheduleWithIterations(
-  scheduleInputs,
-  initialAssignments,
-  maxIterations = 50
-) {
-  // מתחילים מעותק של השיבוץ הראשוני.
-  let assignments = initialAssignments.map((assignment) => ({ ...assignment }));
-  // מצב הבעיות לפני שלב השיפור.
-  const issuesBefore = findScheduleIssues(scheduleInputs, assignments);
-  // ציון הסידור לפני שיפור.
-  const scoreBefore = scoreSchedule(scheduleInputs, assignments);
-  let currentScore = scoreBefore;
-  let rejectedSwaps = 0;
-  // מערך החלפות שהתקבלו בפועל.
-  const acceptedSwaps = [];
-  // יומן קצר של תיקונים שבוצעו.
-  const correctionLog = [];
-  // היסטוריית איטרציות מפורטת.
-  const iterationHistory = [];
-
-  for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
-    // בכל איטרציה מחפשים את ההחלפה החוקית הכי טובה.
-    const improvement = tryImproveBySameRoleSwaps(
-      scheduleInputs,
-      assignments,
-      currentScore
-    );
-
-    rejectedSwaps += improvement.rejectedSwaps;
-
-    if (!improvement.bestImprovement) {
-      // אם אין החלפה שמשפרת, מסיימים את שלב השיפור.
-      break;
-    }
-
-    const scoreBeforeIteration = currentScore;
-    const scoreAfterIteration = improvement.bestImprovement.score;
-
-    iterationHistory.push({
-      // שומרים תיעוד של השיפור שהתקבל באיטרציה הזו.
-      iteration,
-      accepted: true,
-      scoreBefore: scoreBeforeIteration,
-      scoreAfter: scoreAfterIteration,
-      delta: roundScore(
-        scoreBeforeIteration.totalScore - scoreAfterIteration.totalScore
-      ),
-      swap: improvement.bestImprovement.swap,
-    });
-
-    // מקבלים את השיבוץ המשופר וממשיכים ממנו לאיטרציה הבאה.
-    assignments = improvement.bestImprovement.assignments;
-    currentScore = scoreAfterIteration;
-    acceptedSwaps.push(improvement.bestImprovement.swap);
-    correctionLog.push({
-      iteration,
-      scoreAfterSwap: currentScore.totalScore,
-      swap: improvement.bestImprovement.swap,
-    });
-  }
-
-  // מחשבים שוב בעיות וציון אחרי כל השיפורים.
-  const issuesAfter = findScheduleIssues(scheduleInputs, assignments);
-  const scoreAfter = scoreSchedule(scheduleInputs, assignments);
-
-  return {
-    // מחזירים את השיבוצים הסופיים ואת סיכום השיפור.
-    assignments,
-    improvementSummary: {
-      iterationsRun: acceptedSwaps.length,
-      scoreBefore,
-      scoreAfter,
-      issuesBefore: issuesBefore.counts,
-      issuesAfter: issuesAfter.counts,
-      acceptedSwaps,
-      rejectedSwaps,
-      correctionLog,
-      iterationHistory,
-    },
-  };
-}
-
-*/
-
 function rebuildRoleResultsWithAssignments(roleResults, assignments) {
   // מעדכנים את תוצאת כל תפקיד לפי השיבוצים הסופיים אחרי שלב השיפור.
   return roleResults.map((roleResult) => ({
@@ -957,7 +515,7 @@ function rebuildRoleResultsWithAssignments(roleResults, assignments) {
 
 function generateScheduleAlgorithm(scheduleInputs) {
   // הפונקציה הראשית של האלגוריתם.
-  // קלט: עובדים, משמרות, זמינויות ולוגים מתוך scheduleInputs.
+  // קלט: עובדים, משמרות, זמינויות... scheduleInputs.
   // פלט: שיבוצים, סיכומי בדיקה וסיכום שיפור.
 
   // מריצים שיבוץ נפרד לכל תפקיד שמוגדר במערכת.
@@ -968,10 +526,40 @@ function generateScheduleAlgorithm(scheduleInputs) {
   const initialAssignments = roleResults.flatMap(
     (roleResult) => roleResult.assignments
   );
-  // מנסים לשפר את השיבוץ הראשוני בעזרת החלפות חוקיות.
-  // שלב השיפור בהחלפות מושבת; השיבוץ הראשוני הוא השיבוץ הסופי.
-  // אלה השיבוצים הסופיים אחרי שלב השיפור.
-  const allAssignments = initialAssignments;
+  const forcedAssignmentSet = new Set(
+    roleResults
+      .flatMap((roleResult) => roleResult.forcedAssignments)
+      .map((assignment) => getAssignmentKey(assignment))
+  );
+  // V2 post-processing improves the initial schedule with guarded local search.
+  // If it fails, the initial V1 assignments remain the final schedule.
+  let allAssignments = initialAssignments;
+  let improvementSummary = {
+    enabled: false,
+  };
+
+  if (ENABLE_SCHEDULE_IMPROVEMENT) {
+    try {
+      const improvementResult = runScheduleImprovement(
+        scheduleInputs,
+        initialAssignments,
+        {
+          enabled: true,
+          forcedAssignmentSet,
+        }
+      );
+
+      allAssignments = improvementResult.assignments;
+      improvementSummary = improvementResult.improvementSummary;
+    } catch (error) {
+      allAssignments = initialAssignments;
+      improvementSummary = {
+        enabled: true,
+        failed: true,
+        error: error.message,
+      };
+    }
+  }
   // בונים סיכומי בדיקה לכל משמרת ותפקיד.
   const shiftValidationSummaries = buildRoleValidationSummaries(
     scheduleInputs.shifts,
@@ -986,6 +574,7 @@ function generateScheduleAlgorithm(scheduleInputs) {
     allAssignments,
     // סיכום כיסוי וחוזק לכל משמרת ותפקיד.
     shiftValidationSummaries,
+    improvementSummary,
     // פירוט השיפורים שבוצעו אחרי השיבוץ הראשוני.
   };
 }

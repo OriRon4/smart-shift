@@ -32,7 +32,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--shift-type", choices=["morning", "evening"])
     parser.add_argument("--is-weekend", action="store_true")
     parser.add_argument("--expected-customer-load", type=int)
-    parser.add_argument("--manager-rating", type=float)
     return parser
 
 
@@ -56,7 +55,6 @@ def load_input(args: argparse.Namespace) -> list[dict[str, Any]]:
         "day_of_week": args.day_of_week,
         "shift_type": args.shift_type,
         "expected_customer_load": args.expected_customer_load,
-        "manager_rating": args.manager_rating,
     }
     missing = [key for key, value in required.items() if value is None]
 
@@ -74,7 +72,6 @@ def load_input(args: argparse.Namespace) -> list[dict[str, Any]]:
             "shift_type": args.shift_type,
             "is_weekend": args.is_weekend,
             "expected_customer_load": args.expected_customer_load,
-            "manager_rating": args.manager_rating,
         }
     ]
 

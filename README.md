@@ -102,7 +102,7 @@ Run the ML workflow from the project root:
 ```powershell
 python -m pip install -r ml/requirements.txt
 python ml/train_shift_requirements_model.py
-python ml/predict_shift_requirements.py --shift-id 1 --day-of-week 5 --shift-type evening --is-weekend --expected-customer-load 230 --manager-rating 8.4
+python ml/predict_shift_requirements.py --shift-id 1 --day-of-week 5 --shift-type evening --is-weekend --expected-customer-load 230
 ```
 
 Backend smoke test:

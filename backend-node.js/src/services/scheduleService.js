@@ -953,10 +953,10 @@ function normalizeShiftRequirements(body) {
 }
 
 const CUSTOMER_LOAD_SCORES = {
-  low: 3,
-  normal: 5,
-  high: 8,
-  extreme: 10,
+  low: 80,
+  normal: 130,
+  high: 190,
+  extreme: 250,
 };
 
 const WAITER_SUITABILITY_VALUES = new Set([

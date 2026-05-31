@@ -46,6 +46,7 @@ export class ScheduleGridComponent implements OnChanges {
   @Input() onlyShowActive = false;
   @Input() canEditRequiredStrength = false;
   @Input() mlPredictionsByShiftId = new Map<number, ShiftMlPrediction>();
+  @Input() currentEmployeeId: number | null = null;
 
   @Output() replaceAssignment = new EventEmitter<ReplaceAssignmentRequest>();
   @Output() removeAssignment = new EventEmitter<ReplaceAssignmentRequest>();
@@ -261,6 +262,13 @@ export class ScheduleGridComponent implements OnChanges {
     worker: ScheduleWorker
   ): boolean {
     return this.selectedAssignmentKey === this.getAssignmentKey(shift, roleGroup, worker);
+  }
+
+  isCurrentWorker(worker: ScheduleWorker): boolean {
+    return (
+      this.currentEmployeeId !== null &&
+      worker.employeeId === this.currentEmployeeId
+    );
   }
 
   requestReplacement(

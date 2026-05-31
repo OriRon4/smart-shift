@@ -149,6 +149,7 @@
                                 type="button"
                                 class="worker-row"
                                 [class.worker-row--selected]="isAssignmentSelected(shift, roleGroup, worker)"
+                                [class.worker-row--current-user]="isCurrentWorker(worker)"
                                 [disabled]="!canManage"
                                 (click)="selectAssignment(shift, roleGroup, worker)"
                               >
@@ -168,6 +169,10 @@
                                     </span>
                                   }
                                 </span>
+
+                                @if (isCurrentWorker(worker)) {
+                                  <span class="worker-row__self-badge">אני</span>
+                                }
                               </button>
 
                               @if (canManage && isAssignmentSelected(shift, roleGroup, worker)) {

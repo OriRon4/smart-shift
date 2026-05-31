@@ -24,14 +24,12 @@ RAW_FEATURE_NAMES = [
     "shift_type",
     "is_weekend",
     "expected_customer_load",
-    "manager_rating",
 ]
 
 MODEL_FEATURE_NAMES = [
     "day_of_week",
     "is_weekend",
     "expected_customer_load",
-    "manager_rating",
     "shift_type_morning",
     "shift_type_evening",
 ]
@@ -96,7 +94,6 @@ def preprocess_features(dataframe: pd.DataFrame) -> pd.DataFrame:
     features["day_of_week"] = features["day_of_week"].astype(int)
     features["is_weekend"] = features["is_weekend"].astype(int)
     features["expected_customer_load"] = features["expected_customer_load"].astype(float)
-    features["manager_rating"] = features["manager_rating"].astype(float)
     features["shift_type"] = features["shift_type"].astype(str).str.lower()
 
     encoded = pd.get_dummies(features, columns=["shift_type"], prefix="shift_type")

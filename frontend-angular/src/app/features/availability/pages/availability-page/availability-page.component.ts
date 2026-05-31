@@ -6,8 +6,25 @@ import { AvailabilityResponse } from '../../models/availability.models';
 import { AvailabilityApiService } from '../../services/availability-api.service';
 import {
   addDaysToDateKey,
-  getCurrentWeekStartDate
+  getCurrentWeekStartDate,
+  getNextWeekStartDate,
+  isAvailabilityNextWeekCutoffClosed,
+  isCurrentWeekStartDate,
+  isNextWeekStartDate,
+  isPastWeekStartDate
 } from '../../../../shared/date/week-date.util';
+import { AuthService } from '../../../../core/auth/auth.service';
+
+const PREVIOUS_WEEK_SUBMIT_MESSAGE =
+  'Cannot submit availability for a previous week.';
+const PREVIOUS_WEEK_EDIT_MESSAGE =
+  'Viewing previous availability. Editing is closed.';
+const CURRENT_WEEK_CLOSED_MESSAGE =
+  'Availability for the current week is closed.';
+const NEXT_WEEK_CLOSED_MESSAGE =
+  'Availability submission for next week is closed.';
+const ONLY_NEXT_WEEK_MESSAGE =
+  'Availability can only be submitted for next week.';
 
 @Component({
   selector: 'app-availability-page',
@@ -28,11 +45,19 @@ export class AvailabilityPageComponent implements OnInit {
   protected isLoading = false;
   protected errorMessage = '';
   protected successMessage = '';
+  protected readonly currentUser = this.authService.currentUser;
 
-  constructor(private readonly availabilityApiService: AvailabilityApiService) {}
+  constructor(
+    private readonly availabilityApiService: AvailabilityApiService,
+    private readonly authService: AuthService
+  ) {}
 
   ngOnInit(): void {
-    // בכניסה למסך טוענים את הזמינות של השבוע הנוכחי.
+    if (!this.isManager) {
+      this.selectedWeekStartDate = getNextWeekStartDate();
+    }
+
+    // Load the selected week after choosing the role-specific default.
     this.loadAvailability();
   }
 
@@ -54,7 +79,94 @@ export class AvailabilityPageComponent implements OnInit {
     return this.selectedShiftIds.has(shiftId);
   }
 
+  protected get isManager(): boolean {
+    return this.currentUser()?.permissionRole === 'manager';
+  }
+
+  protected get isSelectedWeekPast(): boolean {
+    return isPastWeekStartDate(this.selectedWeekStartDate);
+  }
+
+  protected get isSelectedWeekCurrent(): boolean {
+    return isCurrentWeekStartDate(this.selectedWeekStartDate);
+  }
+
+  protected get isSelectedWeekNext(): boolean {
+    return isNextWeekStartDate(this.selectedWeekStartDate);
+  }
+
+  protected get canEditSelectedWeek(): boolean {
+    return (
+      this.isManager ||
+      (this.isSelectedWeekNext && !isAvailabilityNextWeekCutoffClosed())
+    );
+  }
+
+  protected get availabilityHeading(): string {
+    if (this.isManager) {
+      return 'Submit Availability';
+    }
+
+    if (this.isSelectedWeekNext && this.canEditSelectedWeek) {
+      return 'Submit your availability for next week';
+    }
+
+    if (this.isSelectedWeekNext) {
+      return NEXT_WEEK_CLOSED_MESSAGE;
+    }
+
+    if (this.isSelectedWeekCurrent) {
+      return CURRENT_WEEK_CLOSED_MESSAGE;
+    }
+
+    if (this.isSelectedWeekPast) {
+      return 'Viewing previous availability';
+    }
+
+    return 'Viewing availability';
+  }
+
+  protected get availabilityDescription(): string {
+    if (this.canEditSelectedWeek) {
+      return 'Select the morning and evening shifts you can work.';
+    }
+
+    return 'You can view saved availability for this week, but editing is closed.';
+  }
+
+  protected get availabilityCardHelper(): string {
+    return this.canEditSelectedWeek
+      ? 'Choose any of the 14 weekly shifts'
+      : 'Saved availability for the selected week';
+  }
+
+  protected get availabilityReadOnlyMessage(): string {
+    if (this.canEditSelectedWeek) {
+      return '';
+    }
+
+    if (this.isSelectedWeekPast) {
+      return PREVIOUS_WEEK_EDIT_MESSAGE;
+    }
+
+    if (this.isSelectedWeekCurrent) {
+      return CURRENT_WEEK_CLOSED_MESSAGE;
+    }
+
+    if (this.isSelectedWeekNext) {
+      return NEXT_WEEK_CLOSED_MESSAGE;
+    }
+
+    return ONLY_NEXT_WEEK_MESSAGE;
+  }
+
   protected toggleShift(shiftId: number): void {
+    if (!this.canEditSelectedWeek) {
+      this.errorMessage = this.getSubmitBlockedMessage();
+      this.successMessage = '';
+      return;
+    }
+
     // אם המשמרת כבר נבחרה מסירים אותה, אחרת מוסיפים אותה.
     if (this.selectedShiftIds.has(shiftId)) {
       this.selectedShiftIds.delete(shiftId);
@@ -65,6 +177,12 @@ export class AvailabilityPageComponent implements OnInit {
   }
 
   protected submitAvailability(): void {
+    if (!this.canEditSelectedWeek) {
+      this.errorMessage = this.getSubmitBlockedMessage();
+      this.successMessage = '';
+      return;
+    }
+
     // מתחילים שמירה ומנקים הודעות קודמות.
     this.isLoading = true;
     this.errorMessage = '';
@@ -145,5 +263,13 @@ export class AvailabilityPageComponent implements OnInit {
     }
 
     return 'Availability action failed. Check that the backend is running and try again.';
+  }
+
+  private getSubmitBlockedMessage(): string {
+    if (this.isSelectedWeekPast) {
+      return PREVIOUS_WEEK_SUBMIT_MESSAGE;
+    }
+
+    return this.availabilityReadOnlyMessage || ONLY_NEXT_WEEK_MESSAGE;
   }
 }

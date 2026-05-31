@@ -2,8 +2,8 @@
   <header class="availability-page__toolbar">
     <div>
       <span>Availability</span>
-      <h1>Submit Availability</h1>
-      <p>Select the morning and evening shifts you can work this week.</p>
+      <h1>{{ availabilityHeading }}</h1>
+      <p>{{ availabilityDescription }}</p>
     </div>
 
     <!-- שינוי שבוע מגיע מה-child ומפעיל טעינת זמינות מחדש באבא. -->
@@ -28,19 +28,25 @@
     </section>
   }
 
+  @if (availability && availabilityReadOnlyMessage) {
+    <section class="availability-page__state availability-page__state--locked">
+      {{ availabilityReadOnlyMessage }}
+    </section>
+  }
+
   @if (availability) {
     <section class="availability-card">
       <header>
         <div>
           <strong>{{ selectedShiftIds.size }} selected</strong>
-          <span>Choose any of the 14 weekly shifts</span>
+          <span>{{ availabilityCardHelper }}</span>
         </div>
 
         <!-- לחיצה מפעילה submitAvailability בקומפוננטה. -->
         <button
           class="availability-page__submit"
           type="button"
-          [disabled]="isLoading"
+          [disabled]="isLoading || !canEditSelectedWeek"
           (click)="submitAvailability()"
         >
           Submit Availability
@@ -60,6 +66,7 @@
               <button
                 type="button"
                 [class.availability-shift--selected]="isSelected(shift.shiftId)"
+                [disabled]="!canEditSelectedWeek"
                 (click)="toggleShift(shift.shiftId)"
               >
                 {{ shift.shiftType }}

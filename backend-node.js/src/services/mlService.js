@@ -44,7 +44,6 @@ function buildAverageLookup(averages) {
       `${row.day_of_week}:${row.shift_type}`,
       {
         expectedCustomerLoad: Number(row.expected_customer_load),
-        managerRating: Number(row.manager_rating),
       },
     ])
   );
@@ -53,14 +52,12 @@ function buildAverageLookup(averages) {
       row.shift_type,
       {
         expectedCustomerLoad: Number(row.expected_customer_load),
-        managerRating: Number(row.manager_rating),
       },
     ])
   );
   const overall = averages.overall
     ? {
         expectedCustomerLoad: Number(averages.overall.expected_customer_load),
-        managerRating: Number(averages.overall.manager_rating),
       }
     : null;
 
@@ -71,7 +68,6 @@ function buildAverageLookup(averages) {
         byShiftType.get(shiftType) ||
         overall || {
           expectedCustomerLoad: shiftType === "morning" ? 100 : 160,
-          managerRating: 8,
         }
       );
     },
@@ -92,7 +88,6 @@ function buildPredictionInput(shifts, averages) {
       shift_type: shift.shift_type,
       is_weekend: isWeekend(dayOfWeek),
       expected_customer_load: Math.round(defaults.expectedCustomerLoad),
-      manager_rating: Number(defaults.managerRating.toFixed(1)),
     };
   });
 }

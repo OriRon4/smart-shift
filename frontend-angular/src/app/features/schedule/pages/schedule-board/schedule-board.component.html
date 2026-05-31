@@ -448,6 +448,7 @@
         [activeRoleGroupKeys]="activeRoleGroupKeys"
         [onlyShowActive]="boardFilter !== 'all'"
         [mlPredictionsByShiftId]="mlPredictionsByShiftId"
+        [currentEmployeeId]="currentUser()?.employeeId || null"
         (replaceAssignment)="openReplacement($event)"
         (removeAssignment)="removeAssignment($event)"
         (applyMlPrediction)="applyMlPrediction($event)"
