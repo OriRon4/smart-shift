@@ -200,29 +200,30 @@ export type ScheduleValidationIssue =
   | ScheduleFairnessWarning;
 
 export interface ScheduleImprovementSummary {
-  iterationsRun: number;
-  scoreBefore: ScheduleScore;
-  scoreAfter: ScheduleScore;
-  issuesBefore: ScheduleIssueCounts;
-  issuesAfter: ScheduleIssueCounts;
-  acceptedSwaps: unknown[];
-  rejectedSwaps: number;
-  correctionLog: unknown[];
-}
-
-export interface ScheduleScore {
-  totalScore: number;
-  uncoveredSlots: number;
-  strengthDeficit: number;
-  sameDayPenaltyCount: number;
-  fairnessGap: number;
-}
-
-export interface ScheduleIssueCounts {
-  uncoveredRoleGroups: number;
-  belowStrengthRoleGroups: number;
-  sameDayDoubleShifts: number;
-  employeesUnderTarget: number;
+  enabled: boolean;
+  phase?: string;
+  maxIterations?: number;
+  iterationsRun?: number;
+  stopReason?: string;
+  rejectedRepeatedStateCandidatesCount?: number;
+  acceptedChangesCount?: number;
+  acceptedChanges?: unknown[];
+  iterationHistory?: unknown[];
+  initialScore?: number;
+  finalScore?: number;
+  scoreImprovement?: number;
+  initialCoveragePenalty?: number;
+  finalCoveragePenalty?: number;
+  initialStrengthPenalty?: number;
+  finalStrengthPenalty?: number;
+  initialFairnessPenalty?: number;
+  finalFairnessPenalty?: number;
+  replaceCandidatesCount?: number;
+  validReplaceCandidatesCount?: number;
+  swapCandidatesCount?: number;
+  validSwapCandidatesCount?: number;
+  failed?: boolean;
+  error?: string;
 }
 
 export interface ScheduleAssignmentWarning {

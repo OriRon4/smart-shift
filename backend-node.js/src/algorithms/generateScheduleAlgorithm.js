@@ -1,7 +1,7 @@
 const { SCHEDULE_JOB_ROLES } = require("../constants/roles");
 const { runScheduleImprovement } = require("./scheduleImprovement");
 
-const ENABLE_SCHEDULE_IMPROVEMENT = true;
+const ENABLE_SCHEDULE_IMPROVEMENT = false;
 
 function getAssignmentKey(assignment) {
   return `${assignment.shiftId}:${assignment.employeeId}:${assignment.jobRole}`;
@@ -41,7 +41,7 @@ function getRequiredCount(shift, roleConfig) {
 // מחשב יעד משמרות לעובד לפי כמות הזמינויות שלו ולפי החוזק שלו.
 // עובד חזק יותר מקבל יעד מעט גבוה יותר, אבל עדיין לפי זמינות.
 function calculateTargetShifts(requestedShifts, normalizedStrength) {
-  return requestedShifts * (0.25 + 0.75 * normalizedStrength);
+  return requestedShifts * (0.35 + 0.65 * normalizedStrength);
 }
 
 // מחשב כמה העובד עדיין רחוק מיעד המשמרות שלו.
