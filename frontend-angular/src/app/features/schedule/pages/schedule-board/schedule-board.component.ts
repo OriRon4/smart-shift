@@ -1006,18 +1006,18 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     leftEmployee: Employee,
     rightEmployee: Employee
   ): number {
-    const leftAvailable = this.isEmployeeAvailableForPendingShift(leftEmployee);
-    const rightAvailable = this.isEmployeeAvailableForPendingShift(rightEmployee);
-
-    if (leftAvailable !== rightAvailable) {
-      return leftAvailable ? -1 : 1;
-    }
-
     const leftScheduled = this.isEmployeeScheduledForPendingShift(leftEmployee);
     const rightScheduled = this.isEmployeeScheduledForPendingShift(rightEmployee);
 
     if (leftScheduled !== rightScheduled) {
       return leftScheduled ? 1 : -1;
+    }
+
+    const leftAvailable = this.isEmployeeAvailableForPendingShift(leftEmployee);
+    const rightAvailable = this.isEmployeeAvailableForPendingShift(rightEmployee);
+
+    if (leftAvailable !== rightAvailable) {
+      return leftAvailable ? -1 : 1;
     }
 
     const scoreGap =

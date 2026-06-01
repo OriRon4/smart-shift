@@ -14,3 +14,8 @@ export interface LoginResponse {
   token: string;
   user: AuthUser;
 }
+
+export interface RegisterWorkerResponse {
+  message: string;
+  user: AuthUser;
+}

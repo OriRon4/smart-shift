@@ -20,12 +20,18 @@
   }
 
   <section class="employees-layout">
-    <div class="employees-table">
+    <div
+      class="employees-table"
+      [class.employees-table--manager]="canShowStatusColumn()"
+      [class.employees-table--employee]="!canShowStatusColumn()"
+    >
       <header class="employees-table__header">
         <span>Name</span>
         <span>Role</span>
-        <span>Status</span>
-        <span>Action</span>
+        <span>Phone</span>
+        @if (canShowStatusColumn()) {
+          <span>Status</span>
+        }
       </header>
 
       @for (employee of employees; track employee.id) {
@@ -42,16 +48,18 @@
             <small>#{{ employee.id }}</small>
           </span>
           <span>{{ formatJobRole(employee.jobRole) }}</span>
-          <span>
-            @if (shouldShowSetupStatus(employee)) {
-              Pending setup
-            } @else if (employee.isActive === false) {
-              Inactive
-            } @else {
-              Active
-            }
-          </span>
-          <span>{{ canViewDetails() ? 'Open card' : 'Names only' }}</span>
+          <span>{{ employee.phoneNumber || '-' }}</span>
+          @if (canShowStatusColumn()) {
+            <span>
+              @if (shouldShowSetupStatus(employee)) {
+                Pending setup
+              } @else if (employee.isActive === false) {
+                Inactive
+              } @else {
+                Active
+              }
+            </span>
+          }
         </button>
       } @empty {
         <p class="employees-table__empty">No employees found.</p>
@@ -101,6 +109,18 @@
               }
             </select>
           </label>
+
+          <label>
+            Phone number
+            <input
+              type="tel"
+              name="phoneNumber"
+              [value]="editableEmployee.phoneNumber || ''"
+              (input)="updateStringField('phoneNumber', $event)"
+              [disabled]="!canEdit()"
+              required
+            />
+          </label>
         </div>
 
         <div class="employee-card__scores">
@@ -137,7 +157,7 @@
 
         @if (canEdit()) {
           <button type="button" class="employee-card__secondary-action" (click)="openAvailabilityReview()">
-            Review Availability
+            {{ availabilityToggleButtonLabel }}
           </button>
         }
 
@@ -181,13 +201,13 @@
             }
 
             <button type="button" (click)="saveEmployeeAvailability()" [disabled]="isAvailabilityLoading || !employeeAvailability">
-              Save availability
+              {{ saveAvailabilityButtonLabel }}
             </button>
           </section>
         }
 
         @if (canEdit()) {
-          <button type="submit" [disabled]="isLoading">Save employee</button>
+          <button type="submit" [disabled]="isLoading">{{ saveEmployeeButtonLabel }}</button>
         }
       </form>
     } @else if (!canViewDetails()) {

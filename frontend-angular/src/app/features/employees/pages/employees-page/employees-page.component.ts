@@ -30,6 +30,8 @@ export class EmployeesPageComponent implements OnInit {
   protected selectedAvailabilityShiftIds = new Set<number>();
   protected isAvailabilityLoading = false;
   protected isAvailabilityReviewOpen = false;
+  protected isEmployeeSavedIndicator = false;
+  protected isAvailabilitySavedIndicator = false;
   protected readonly currentUser = this.authService.currentUser;
 
   protected readonly jobRoles = [
@@ -58,6 +60,10 @@ export class EmployeesPageComponent implements OnInit {
     return this.permissionService.canEditEmployees(this.currentUser());
   }
 
+  protected canShowStatusColumn(): boolean {
+    return this.canEdit();
+  }
+
   protected needsManagerSetup(employee: Employee | null): boolean {
     if (!employee || employee.jobRole === 'manager') {
       return false;
@@ -81,8 +87,8 @@ export class EmployeesPageComponent implements OnInit {
   }
 
   protected formatJobRole(jobRole: string | undefined): string {
-    if (!jobRole) {
-      return 'Employee';
+    if (!jobRole || jobRole === 'employee') {
+      return '-';
     }
 
     if (jobRole === 'shift_leader') {
@@ -98,7 +104,9 @@ export class EmployeesPageComponent implements OnInit {
 
     this.employeesApiService.getEmployees().subscribe({
       next: (response) => {
-        this.employees = response.employees;
+        this.employees = response.employees.map((employee) =>
+          this.normalizeEmployee(employee)
+        );
         this.isLoading = false;
       },
       error: (error: unknown) => {
@@ -119,8 +127,8 @@ export class EmployeesPageComponent implements OnInit {
 
     this.employeesApiService.getEmployee(employee.id).subscribe({
       next: (response) => {
-        this.selectedEmployee = response.employee;
-        this.editableEmployee = { ...response.employee };
+        this.selectedEmployee = this.normalizeEmployee(response.employee);
+        this.editableEmployee = { ...this.selectedEmployee };
         this.isAvailabilityReviewOpen = false;
         this.employeeAvailability = null;
         this.selectedAvailabilityShiftIds = new Set();
@@ -144,8 +152,9 @@ export class EmployeesPageComponent implements OnInit {
 
     this.employeesApiService.updateEmployee(this.editableEmployee).subscribe({
       next: (response) => {
-        this.selectedEmployee = response.employee;
-        this.editableEmployee = { ...response.employee };
+        this.selectedEmployee = this.normalizeEmployee(response.employee);
+        this.editableEmployee = { ...this.selectedEmployee };
+        this.showEmployeeSavedIndicator();
         this.successMessage = 'Employee saved.';
         this.loadEmployees();
       },
@@ -157,7 +166,7 @@ export class EmployeesPageComponent implements OnInit {
   }
 
   protected updateStringField(
-    fieldName: 'fullName' | 'jobRole',
+    fieldName: 'fullName' | 'phoneNumber' | 'jobRole',
     event: Event
   ): void {
     if (!this.editableEmployee) {
@@ -210,6 +219,11 @@ export class EmployeesPageComponent implements OnInit {
 
   protected openAvailabilityReview(): void {
     if (!this.canEdit()) {
+      return;
+    }
+
+    if (this.isAvailabilityReviewOpen) {
+      this.closeAvailabilityReview();
       return;
     }
 
@@ -266,8 +280,12 @@ export class EmployeesPageComponent implements OnInit {
           this.selectedAvailabilityShiftIds = new Set(
             availability.selectedShiftIds
           );
+          this.showAvailabilitySavedIndicator();
           this.successMessage = 'Employee availability saved.';
           this.isAvailabilityLoading = false;
+          window.setTimeout(() => {
+            this.isAvailabilityReviewOpen = false;
+          }, 700);
         },
         error: (error: unknown) => {
           this.errorMessage = this.resolveErrorMessage(error);
@@ -313,6 +331,52 @@ export class EmployeesPageComponent implements OnInit {
 
   private addDays(dateKey: string, dayOffset: number): string {
     return addDaysToDateKey(dateKey, dayOffset);
+  }
+
+  private normalizeEmployee(employee: Employee): Employee {
+    const jobRole =
+      employee.jobRole || (employee.role === 'employee' ? undefined : employee.role);
+    const phoneNumber = employee.phoneNumber || employee.phone_number || '';
+
+    return {
+      ...employee,
+      phoneNumber,
+      phone_number: phoneNumber,
+      jobRole: jobRole as Employee['jobRole'],
+      role: jobRole,
+    };
+  }
+
+  protected get saveEmployeeButtonLabel(): string {
+    return this.isEmployeeSavedIndicator ? 'Saved ✓' : 'Save employee';
+  }
+
+  protected get saveAvailabilityButtonLabel(): string {
+    return this.isAvailabilitySavedIndicator ? 'Saved ✓' : 'Save availability';
+  }
+
+  protected get availabilityToggleButtonLabel(): string {
+    if (this.isAvailabilitySavedIndicator) {
+      return 'Saved ✓';
+    }
+
+    return this.isAvailabilityReviewOpen
+      ? 'Close Availability'
+      : 'Review Availability';
+  }
+
+  private showEmployeeSavedIndicator(): void {
+    this.isEmployeeSavedIndicator = true;
+    window.setTimeout(() => {
+      this.isEmployeeSavedIndicator = false;
+    }, 1600);
+  }
+
+  private showAvailabilitySavedIndicator(): void {
+    this.isAvailabilitySavedIndicator = true;
+    window.setTimeout(() => {
+      this.isAvailabilitySavedIndicator = false;
+    }, 1600);
   }
 
   private resolveErrorMessage(error: unknown): string {

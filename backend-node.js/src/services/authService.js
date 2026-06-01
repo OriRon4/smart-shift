@@ -7,6 +7,7 @@ const { createHttpError } = require("../utils/errors");
 const BCRYPT_ROUNDS = 12;
 const JWT_EXPIRES_IN = "8h";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^[0-9+\-\s()]{7,30}$/;
 
 function buildToken(user) {
   // JWT מכיל מזהים והרשאה כדי לזהות את המשתמש בבקשות הבאות.
@@ -45,8 +46,12 @@ async function login(loginValue, password) {
   // מחפשים משתמש לפי username או email.
   const user = await authRepository.findUserByLogin(loginValue);
 
-  if (!user || !user.isActive) {
+  if (!user) {
     throw createHttpError(401, "Invalid login credentials");
+  }
+
+  if (!user.isActive || user.employeeIsActive === false) {
+    throw createHttpError(403, "Your account is pending manager approval.");
   }
 
   // בודקים שהסיסמה מתאימה ל-hash ששמור במסד.
@@ -85,6 +90,7 @@ async function verifyPassword(user, password) {
 function normalizeWorkerRegistration(body) {
   const fullName = String(body.fullName || "").trim();
   const email = String(body.email || "").trim().toLowerCase();
+  const phoneNumber = String(body.phoneNumber || body.phone_number || "").trim();
   const username = String(body.username || email.split("@")[0] || "").trim();
   const password = String(body.password || "").trim();
 
@@ -94,6 +100,10 @@ function normalizeWorkerRegistration(body) {
 
   if (!EMAIL_PATTERN.test(email)) {
     throw createHttpError(400, "A valid email is required");
+  }
+
+  if (!PHONE_PATTERN.test(phoneNumber)) {
+    throw createHttpError(400, "A valid phone number is required");
   }
 
   if (!username) {
@@ -107,6 +117,7 @@ function normalizeWorkerRegistration(body) {
   return {
     fullName,
     email,
+    phoneNumber,
     username,
     password,
   };
@@ -143,7 +154,7 @@ async function registerWorker(body) {
   }
 
   return {
-    token: buildToken(user),
+    message: "Account created. Your account is pending manager approval.",
     user: sanitizeUser(user),
   };
 }
@@ -167,7 +178,7 @@ async function getUserByToken(token) {
   // אחרי פענוח ה-token בודקים שהמשתמש עדיין קיים ופעיל במסד.
   const user = await authRepository.findUserById(userId);
 
-  if (!user || !user.isActive) {
+  if (!user || !user.isActive || user.employeeIsActive === false) {
     throw createHttpError(401, "Invalid authentication token");
   }
 

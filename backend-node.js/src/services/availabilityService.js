@@ -16,8 +16,6 @@ const CURRENT_WEEK_CLOSED_MESSAGE =
   "Availability for the current week is closed.";
 const NEXT_WEEK_CLOSED_MESSAGE =
   "Availability submission for next week is closed.";
-const ONLY_NEXT_WEEK_MESSAGE =
-  "Availability can only be submitted for next week.";
 
 function formatDateKey(value) {
   if (value instanceof Date) {
@@ -140,11 +138,10 @@ function ensureCanSubmitAvailabilityForWeek(user, weekStartDate) {
     throw createHttpError(400, CURRENT_WEEK_CLOSED_MESSAGE);
   }
 
-  if (selectedWeekStartDate !== nextWeekStartDate) {
-    throw createHttpError(400, ONLY_NEXT_WEEK_MESSAGE);
-  }
-
-  if (new Date().getDay() > AVAILABILITY_NEXT_WEEK_CUTOFF_DAY) {
+  if (
+    selectedWeekStartDate === nextWeekStartDate &&
+    new Date().getDay() > AVAILABILITY_NEXT_WEEK_CUTOFF_DAY
+  ) {
     throw createHttpError(400, NEXT_WEEK_CLOSED_MESSAGE);
   }
 }

@@ -23,8 +23,6 @@ const CURRENT_WEEK_CLOSED_MESSAGE =
   'Availability for the current week is closed.';
 const NEXT_WEEK_CLOSED_MESSAGE =
   'Availability submission for next week is closed.';
-const ONLY_NEXT_WEEK_MESSAGE =
-  'Availability can only be submitted for next week.';
 
 @Component({
   selector: 'app-availability-page',
@@ -98,7 +96,9 @@ export class AvailabilityPageComponent implements OnInit {
   protected get canEditSelectedWeek(): boolean {
     return (
       this.isManager ||
-      (this.isSelectedWeekNext && !isAvailabilityNextWeekCutoffClosed())
+      (!this.isSelectedWeekPast &&
+        !this.isSelectedWeekCurrent &&
+        (!this.isSelectedWeekNext || !isAvailabilityNextWeekCutoffClosed()))
     );
   }
 
@@ -123,7 +123,7 @@ export class AvailabilityPageComponent implements OnInit {
       return 'Viewing previous availability';
     }
 
-    return 'Viewing availability';
+    return 'Submit your availability for a future week';
   }
 
   protected get availabilityDescription(): string {
@@ -157,7 +157,7 @@ export class AvailabilityPageComponent implements OnInit {
       return NEXT_WEEK_CLOSED_MESSAGE;
     }
 
-    return ONLY_NEXT_WEEK_MESSAGE;
+    return '';
   }
 
   protected toggleShift(shiftId: number): void {
@@ -270,6 +270,6 @@ export class AvailabilityPageComponent implements OnInit {
       return PREVIOUS_WEEK_SUBMIT_MESSAGE;
     }
 
-    return this.availabilityReadOnlyMessage || ONLY_NEXT_WEEK_MESSAGE;
+    return this.availabilityReadOnlyMessage || '';
   }
 }

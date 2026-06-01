@@ -22,7 +22,9 @@
                       <span class="shift-card__marker"></span>
                       <div>
                         <h2>{{ formatShiftType(shift) }}</h2>
-                        <p>Strength {{ getShiftAssignedStrength(shift) }} / {{ shift.requiredStrengthScore }}</p>
+                        @if (canManage || canEditRequiredStrength) {
+                          <p>Strength {{ getShiftAssignedStrength(shift) }} / {{ shift.requiredStrengthScore }}</p>
+                        }
                       </div>
 
                       @if (canManage || canEditRequiredStrength) {
@@ -170,9 +172,6 @@
                                   }
                                 </span>
 
-                                @if (isCurrentWorker(worker)) {
-                                  <span class="worker-row__self-badge">אני</span>
-                                }
                               </button>
 
                               @if (canManage && isAssignmentSelected(shift, roleGroup, worker)) {
@@ -199,7 +198,7 @@
                           </button>
                         }
 
-                        @if (roleGroup.assignedStrengthScore !== undefined) {
+                        @if ((canManage || canEditRequiredStrength) && roleGroup.assignedStrengthScore !== undefined) {
                           <footer class="role-group__footer">
                             Strength {{ roleGroup.assignedStrengthScore }} / {{ roleGroup.requiredStrengthScore }}
                           </footer>

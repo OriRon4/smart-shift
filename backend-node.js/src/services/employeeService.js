@@ -3,11 +3,16 @@ const { PERMISSION_ROLES, JOB_ROLES } = require("../constants/roles");
 const { createHttpError } = require("../utils/errors");
 
 const ALLOWED_JOB_ROLES = new Set(Object.values(JOB_ROLES));
+const PHONE_PATTERN = /^[0-9+\-\s()]{7,30}$/;
 
 function toNamesOnly(employee) {
   return {
     id: employee.id,
     fullName: employee.fullName,
+    phoneNumber: employee.phoneNumber,
+    phone_number: employee.phoneNumber,
+    jobRole: employee.jobRole,
+    role: employee.jobRole,
   };
 }
 
@@ -27,10 +32,7 @@ async function getEmployeesForUser(user) {
 
   if (!canViewDetails(user)) {
     return employees
-      .filter(
-        (employee) =>
-          employee.isActive || employee.id === Number(user.employeeId)
-      )
+      .filter((employee) => employee.isActive)
       .map(toNamesOnly);
   }
 
@@ -63,9 +65,14 @@ function readNumber(value, fieldName, min, max) {
 
 function normalizeEmployeeUpdate(body) {
   const fullName = String(body.fullName || "").trim();
+  const phoneNumber = String(body.phoneNumber || body.phone_number || "").trim();
 
   if (!fullName) {
     throw createHttpError(400, "fullName is required");
+  }
+
+  if (!PHONE_PATTERN.test(phoneNumber)) {
+    throw createHttpError(400, "A valid phoneNumber is required");
   }
 
   if (!ALLOWED_JOB_ROLES.has(body.jobRole)) {
@@ -80,6 +87,7 @@ function normalizeEmployeeUpdate(body) {
 
   return {
     fullName,
+    phoneNumber,
     jobRole: body.jobRole,
     isActive: Boolean(body.isActive),
     setupStatus: hasManagerSetup ? "complete" : "pending",
@@ -99,7 +107,17 @@ async function updateEmployee(employeeId, body) {
   }
 
   const employeeUpdate = normalizeEmployeeUpdate(body || {});
-  return employeeRepository.updateEmployee(employeeId, employeeUpdate);
+  const updatedEmployee = await employeeRepository.updateEmployee(
+    employeeId,
+    employeeUpdate
+  );
+
+  await employeeRepository.updateLinkedUserActiveState(
+    employeeId,
+    updatedEmployee.isActive
+  );
+
+  return updatedEmployee;
 }
 
 module.exports = {

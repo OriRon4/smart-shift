@@ -3,7 +3,7 @@ import { Injectable, signal } from '@angular/core';
 import { catchError, map, Observable, of, tap } from 'rxjs';
 
 import { environment } from '../../../environments/environment';
-import { AuthUser, LoginResponse } from './auth.models';
+import { AuthUser, LoginResponse, RegisterWorkerResponse } from './auth.models';
 
 const TOKEN_STORAGE_KEY = 'smartShiftToken';
 const USER_STORAGE_KEY = 'smartShiftUser';
@@ -41,20 +41,18 @@ export class AuthService {
 
   registerWorker(worker: {
     fullName: string;
+    phoneNumber: string;
     username: string;
     email: string;
     password: string;
-  }): Observable<LoginResponse> {
-    return this.http
-      .post<LoginResponse>(`${this.apiUrl}/register-worker`, worker)
-      .pipe(
-        tap((response) => {
-          localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
-          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(response.user));
-          this.isSessionVerified = true;
-          this.currentUser.set(response.user);
-        })
-      );
+  }): Observable<RegisterWorkerResponse> {
+    return this.http.post<RegisterWorkerResponse>(
+      `${this.apiUrl}/register-worker`,
+      {
+        ...worker,
+        phone_number: worker.phoneNumber
+      }
+    );
   }
 
   loadCurrentUser(): Observable<{ user: AuthUser }> {

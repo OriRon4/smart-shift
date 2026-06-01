@@ -3,7 +3,10 @@ import { JobRole } from '../../schedule/models/schedule.models';
 export interface Employee {
   id: number;
   fullName: string;
+  phoneNumber?: string;
+  phone_number?: string;
   jobRole?: JobRole;
+  role?: string;
   isActive?: boolean;
   setupStatus?: 'pending' | 'complete';
   professionalism?: number;

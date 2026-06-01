@@ -4,7 +4,10 @@ function mapEmployee(row) {
   return {
     id: row.id,
     fullName: row.full_name,
+    phoneNumber: row.phone_number,
+    phone_number: row.phone_number,
     jobRole: row.role,
+    role: row.role,
     isActive: Boolean(row.is_active),
     setupStatus: row.setup_status || "complete",
     professionalism: Number(row.professionalism),
@@ -21,6 +24,7 @@ async function getEmployees() {
       SELECT
         id,
         full_name,
+        phone_number,
         role,
         is_active,
         setup_status,
@@ -43,6 +47,7 @@ async function getEmployeeById(employeeId) {
       SELECT
         id,
         full_name,
+        phone_number,
         role,
         is_active,
         setup_status,
@@ -67,6 +72,7 @@ async function updateEmployee(employeeId, employee) {
       UPDATE employees
       SET
         full_name = ?,
+        phone_number = ?,
         role = ?,
         is_active = ?,
         setup_status = ?,
@@ -79,6 +85,7 @@ async function updateEmployee(employeeId, employee) {
     `,
     [
       employee.fullName,
+      employee.phoneNumber,
       employee.jobRole,
       employee.isActive,
       employee.setupStatus,
@@ -94,8 +101,21 @@ async function updateEmployee(employeeId, employee) {
   return getEmployeeById(employeeId);
 }
 
+async function updateLinkedUserActiveState(employeeId, isActive) {
+  await pool.query(
+    `
+      UPDATE users
+      SET is_active = ?
+      WHERE employee_id = ?
+        AND permission_role = 'employee'
+    `,
+    [isActive, employeeId]
+  );
+}
+
 module.exports = {
   getEmployees,
   getEmployeeById,
   updateEmployee,
+  updateLinkedUserActiveState,
 };

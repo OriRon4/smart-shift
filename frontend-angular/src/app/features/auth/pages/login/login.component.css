@@ -206,13 +206,23 @@
   opacity: 0.7;
 }
 
-.login-form__error {
-  border: 1px solid #ffd0cc;
+.login-form__error,
+.login-form__success {
   border-radius: 12px;
-  background: #fff1f0;
-  color: #b42318;
   margin: 0;
   padding: 11px 12px;
+}
+
+.login-form__error {
+  border: 1px solid #ffd0cc;
+  background: #fff1f0;
+  color: #b42318;
+}
+
+.login-form__success {
+  border: 1px solid #bce8c9;
+  background: #f1fbf4;
+  color: #16603b;
 }
 
 .demo-accounts {

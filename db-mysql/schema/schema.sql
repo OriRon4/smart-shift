@@ -1,9 +1,10 @@
 CREATE TABLE employees (
   id INT NOT NULL AUTO_INCREMENT,
   full_name VARCHAR(100) NOT NULL,
+  phone_number VARCHAR(30) NOT NULL,
   role VARCHAR(30) NOT NULL DEFAULT 'waiter',
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  setup_status ENUM('pending', 'complete') NOT NULL DEFAULT 'complete',
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
+  setup_status ENUM('pending', 'complete') NOT NULL DEFAULT 'pending',
   professionalism TINYINT UNSIGNED NOT NULL,
   responsibility TINYINT UNSIGNED NOT NULL,
   pressure_handling TINYINT UNSIGNED NOT NULL,
@@ -19,7 +20,9 @@ CREATE TABLE employees (
   CONSTRAINT chk_employees_potential
     CHECK (potential BETWEEN 0 AND 10),
   CONSTRAINT chk_employees_seniority_months
-    CHECK (seniority_months >= 0)
+    CHECK (seniority_months >= 0),
+  CONSTRAINT chk_employees_phone_number
+    CHECK (TRIM(phone_number) <> '')
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_employees_role_is_active
@@ -32,7 +35,7 @@ CREATE TABLE users (
   email VARCHAR(120) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   permission_role ENUM('manager', 'shift_leader', 'employee') NOT NULL,
-  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  is_active BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   CONSTRAINT uq_users_username UNIQUE (username),

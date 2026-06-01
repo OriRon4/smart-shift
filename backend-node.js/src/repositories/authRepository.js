@@ -14,6 +14,11 @@ function mapUser(row) {
     passwordHash: row.password_hash,
     permissionRole: row.permission_role,
     isActive: Boolean(row.is_active),
+    employeeIsActive:
+      row.employee_is_active === null || row.employee_is_active === undefined
+        ? null
+        : Boolean(row.employee_is_active),
+    setupStatus: row.setup_status || null,
     displayName: row.full_name || row.username,
     jobRole: row.employee_role || null,
   };
@@ -31,6 +36,8 @@ async function findUserByLogin(login) {
         users.password_hash,
         users.permission_role,
         users.is_active,
+        employees.is_active AS employee_is_active,
+        employees.setup_status,
         employees.full_name,
         employees.role AS employee_role
       FROM users
@@ -58,6 +65,8 @@ async function findUserById(userId) {
         users.password_hash,
         users.permission_role,
         users.is_active,
+        employees.is_active AS employee_is_active,
+        employees.setup_status,
         employees.full_name,
         employees.role AS employee_role
       FROM users
@@ -82,6 +91,7 @@ async function createWorkerUser(worker) {
       `
         INSERT INTO employees (
           full_name,
+          phone_number,
           role,
           is_active,
           setup_status,
@@ -91,9 +101,9 @@ async function createWorkerUser(worker) {
           seniority_months,
           potential
         )
-        VALUES (?, 'waiter', FALSE, 'pending', 0, 0, 0, 0, 0)
+        VALUES (?, ?, 'waiter', FALSE, 'pending', 0, 0, 0, 0, 0)
       `,
-      [worker.fullName]
+      [worker.fullName, worker.phoneNumber]
     );
 
     const employeeId = employeeResult.insertId;
@@ -108,7 +118,7 @@ async function createWorkerUser(worker) {
           permission_role,
           is_active
         )
-        VALUES (?, ?, ?, ?, 'employee', TRUE)
+        VALUES (?, ?, ?, ?, 'employee', FALSE)
       `,
       [employeeId, worker.username, worker.email, worker.passwordHash]
     );

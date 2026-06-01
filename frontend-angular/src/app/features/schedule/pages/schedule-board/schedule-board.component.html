@@ -81,36 +81,6 @@
       </section>
     }
 
-      @if (board?.summary && canManageSchedule()) {
-      <section class="schedule-board__summary-cards schedule-board__summary-cards--compact" aria-label="Schedule summary">
-        <button
-          type="button"
-          class="kpi-card"
-          [class.kpi-card--good]="belowStrengthShiftCount === 0"
-          [class.kpi-card--warning]="belowStrengthShiftCount > 0"
-          [class.kpi-card--active]="boardFilter === 'strength'"
-          (click)="setBoardFilter('strength')"
-        >
-          <span class="kpi-card__label">Strength risks</span>
-          <strong>{{ strengthRiskGroups }}</strong>
-          <small>{{ belowStrengthShiftCount }} shifts</small>
-        </button>
-
-        <button
-          type="button"
-          class="kpi-card"
-          [class.kpi-card--good]="gapRoleGroupCount === 0"
-          [class.kpi-card--warning]="gapRoleGroupCount > 0"
-          [class.kpi-card--active]="boardFilter === 'gaps'"
-          (click)="setBoardFilter('gaps')"
-        >
-          <span class="kpi-card__label">Coverage gaps</span>
-          <strong>{{ gapRoleGroupCount }}</strong>
-          <small>{{ unfilledSlots }} missing</small>
-        </button>
-      </section>
-    }
-
     @if (pendingReplacement) {
       <button class="replacement-backdrop" type="button" aria-label="Close replacement drawer" (click)="closeReplacementDrawer()"></button>
       <aside class="replacement-drawer" aria-label="Replace worker">

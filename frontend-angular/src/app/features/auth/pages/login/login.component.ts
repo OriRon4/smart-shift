@@ -16,12 +16,14 @@ export class LoginComponent {
   protected loginValue = 'manager@example.com';
   protected password = 'password';
   protected registerFullName = '';
+  protected registerPhoneNumber = '';
   protected registerEmail = '';
   protected registerUsername = '';
   protected registerPassword = '';
   protected isRegisterMode = false;
   protected isLoading = false;
   protected errorMessage = '';
+  protected successMessage = '';
 
   constructor(
     private readonly authService: AuthService,
@@ -45,13 +47,14 @@ export class LoginComponent {
 
     this.isLoading = true;
     this.errorMessage = '';
+    this.successMessage = '';
 
     // שולחים login/password ל-AuthService; ה-service מחזיר Observable.
     this.authService.login(this.loginValue, this.password).subscribe({
       // בהצלחה המשתמש כבר נשמר ב-service, ואז עוברים למסך הסידור.
       next: () => {
         this.isLoading = false;
-        void this.router.navigate(['/schedule']);
+        void this.router.navigate(['/dashboard']);
       },
       // בשגיאה מציגים הודעה במסך ונשארים בעמוד התחברות.
       error: (error: unknown) => {
@@ -69,10 +72,12 @@ export class LoginComponent {
 
     this.isLoading = true;
     this.errorMessage = '';
+    this.successMessage = '';
 
     this.authService
       .registerWorker({
         fullName: this.registerFullName,
+        phoneNumber: this.registerPhoneNumber,
         username: this.registerUsername,
         email: this.registerEmail,
         password: this.registerPassword
@@ -80,7 +85,8 @@ export class LoginComponent {
       .subscribe({
         next: () => {
           this.isLoading = false;
-          void this.router.navigate(['/dashboard']);
+          this.isRegisterMode = false;
+          this.successMessage = 'Your account is pending manager approval.';
         },
         error: (error: unknown) => {
           this.errorMessage = this.resolveErrorMessage(error);
@@ -92,11 +98,13 @@ export class LoginComponent {
   protected showLogin(): void {
     this.isRegisterMode = false;
     this.errorMessage = '';
+    this.successMessage = '';
   }
 
   protected showRegister(): void {
     this.isRegisterMode = true;
     this.errorMessage = '';
+    this.successMessage = '';
   }
 
   protected updateLoginValue(event: Event): void {
@@ -108,7 +116,12 @@ export class LoginComponent {
   }
 
   protected updateRegisterField(
-    fieldName: 'registerFullName' | 'registerEmail' | 'registerUsername' | 'registerPassword',
+    fieldName:
+      | 'registerFullName'
+      | 'registerPhoneNumber'
+      | 'registerEmail'
+      | 'registerUsername'
+      | 'registerPassword',
     event: Event
   ): void {
     this[fieldName] = (event.target as HTMLInputElement).value;
