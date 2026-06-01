@@ -1,5 +1,6 @@
 const scheduleRepository = require("../repositories/scheduleRepository");
 const mlRepository = require("../repositories/mlRepository");
+const mlTrainingService = require("./mlTrainingService");
 const {
   buildRoleValidationSummaries,
   calculateStrengthScore,
@@ -952,62 +953,28 @@ function normalizeShiftRequirements(body) {
   };
 }
 
-const CUSTOMER_LOAD_SCORES = {
-  low: 80,
-  normal: 130,
-  high: 190,
-  extreme: 250,
-};
-
-const WAITER_SUITABILITY_VALUES = new Set([
-  "needs_more_waiters",
-  "suitable",
-  "too_many_waiters",
-]);
-
-const TEAM_PERFORMANCE_SCORES = {
-  weak: 4,
-  reasonable: 6,
-  good: 8,
-  excellent: 10,
-};
-
 function normalizeFinishShiftFeedback(body) {
-  const actualCustomerLoad = String(body.actualCustomerLoad || "").trim();
-  const waiterSuitability = String(body.waiterSuitability || "").trim();
-  const teamPerformance = String(body.teamPerformance || "").trim();
+  const actualCustomers = Number(body.actualCustomers);
+  const actualWaitersNeeded = Number(body.actualWaitersNeeded);
+  const managerRating = Number(body.managerRating);
 
-  if (!Object.prototype.hasOwnProperty.call(CUSTOMER_LOAD_SCORES, actualCustomerLoad)) {
-    throw createHttpError(400, "actualCustomerLoad is invalid");
+  if (!Number.isInteger(actualCustomers) || actualCustomers <= 0) {
+    throw createHttpError(400, "actualCustomers must be a positive integer");
   }
 
-  if (!WAITER_SUITABILITY_VALUES.has(waiterSuitability)) {
-    throw createHttpError(400, "waiterSuitability is invalid");
+  if (!Number.isInteger(actualWaitersNeeded) || actualWaitersNeeded <= 0) {
+    throw createHttpError(400, "actualWaitersNeeded must be a positive integer");
   }
 
-  if (!Object.prototype.hasOwnProperty.call(TEAM_PERFORMANCE_SCORES, teamPerformance)) {
-    throw createHttpError(400, "teamPerformance is invalid");
+  if (!Number.isInteger(managerRating) || managerRating < 1 || managerRating > 5) {
+    throw createHttpError(400, "managerRating must be an integer between 1 and 5");
   }
 
   return {
-    actualCustomerLoad,
-    waiterSuitability,
-    teamPerformance,
-    expectedCustomerLoad: CUSTOMER_LOAD_SCORES[actualCustomerLoad],
-    managerRating: TEAM_PERFORMANCE_SCORES[teamPerformance],
+    actualCustomers,
+    actualWaitersNeeded,
+    managerRating,
   };
-}
-
-function calculateFeedbackWaiterCount(waiterAssignmentCount, waiterSuitability) {
-  if (waiterSuitability === "needs_more_waiters") {
-    return waiterAssignmentCount + 1;
-  }
-
-  if (waiterSuitability === "too_many_waiters") {
-    return Math.max(1, waiterAssignmentCount - 1);
-  }
-
-  return waiterAssignmentCount;
 }
 
 function calculateAssignedWaiterStrength(assignments, employees) {
@@ -1092,12 +1059,6 @@ async function finishShift(shiftId, body, user) {
     throw createHttpError(404, "Shift not found");
   }
 
-  const existingFeedback = await mlRepository.getPerformanceLogByShift(shift);
-
-  if (existingFeedback) {
-    throw createHttpError(409, "Shift feedback was already submitted");
-  }
-
   const weekStartDate = getSundayForDate(shift.shift_date);
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
     weekStartDate
@@ -1116,10 +1077,13 @@ async function finishShift(shiftId, body, user) {
   const assignedWaiterCount = shiftAssignments.filter(
     (assignment) => assignment.jobRole === "waiter"
   ).length;
-  const actualWaitersCount = calculateFeedbackWaiterCount(
-    assignedWaiterCount,
-    feedback.waiterSuitability
-  );
+  const assignedBartenderCount = shiftAssignments.filter(
+    (assignment) => assignment.jobRole === "bartender"
+  ).length;
+  const assignedShiftLeaderCount = shiftAssignments.filter(
+    (assignment) => assignment.jobRole === "shift_leader"
+  ).length;
+  const waiterGap = feedback.actualWaitersNeeded - assignedWaiterCount;
   const actualStrengthScore = calculateAssignedWaiterStrength(
     shiftAssignments,
     scheduleInputs.allEmployees || scheduleInputs.employees
@@ -1128,15 +1092,22 @@ async function finishShift(shiftId, body, user) {
   const dayOfWeek = getDayOfWeek(shiftDate);
 
   await mlRepository.saveShiftPerformanceLog({
+    shiftId: numericShiftId,
     shiftDate,
     shiftType: shift.shift_type,
     dayOfWeek,
     isWeekend: isWeekend(dayOfWeek),
-    expectedCustomerLoad: feedback.expectedCustomerLoad,
-    actualWaitersCount,
+    scheduledWaiters: assignedWaiterCount,
+    actualCustomers: feedback.actualCustomers,
+    actualWaitersNeeded: feedback.actualWaitersNeeded,
     actualStrengthScore,
     managerRating: feedback.managerRating,
+    waiterGap,
+    wasUnderstaffed: waiterGap > 0,
+    wasOverstaffed: waiterGap < 0,
+    isSynthetic: false,
   });
+  const trainingTrigger = mlTrainingService.triggerBackgroundTraining();
 
   const refreshedScheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
     weekStartDate
@@ -1147,16 +1118,20 @@ async function finishShift(shiftId, body, user) {
   );
 
   return {
-    message: "Shift feedback saved successfully",
+    message: "Shift finished successfully. ML model update started in the background.",
     feedback: {
       shiftId: numericShiftId,
-      actualCustomerLoad: feedback.actualCustomerLoad,
-      waiterSuitability: feedback.waiterSuitability,
-      teamPerformance: feedback.teamPerformance,
-      expectedCustomerLoad: feedback.expectedCustomerLoad,
-      actualWaitersCount,
+      scheduledWaiters: assignedWaiterCount,
+      scheduledBartenders: assignedBartenderCount,
+      scheduledShiftLeaders: assignedShiftLeaderCount,
+      actualCustomers: feedback.actualCustomers,
+      actualWaitersNeeded: feedback.actualWaitersNeeded,
+      waiterGap,
+      wasUnderstaffed: waiterGap > 0,
+      wasOverstaffed: waiterGap < 0,
       actualStrengthScore,
       managerRating: feedback.managerRating,
+      backgroundTraining: trainingTrigger,
     },
     ...buildScheduleBoardResponse(refreshedScheduleInputs, algorithmResult, {
       scheduleId: persistedSchedule.scheduleId,

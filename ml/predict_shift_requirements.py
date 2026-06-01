@@ -6,12 +6,11 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import pandas as pd
 
 from ml_utils import (
     METADATA_PATH,
-    STRENGTH_MODEL_PATH,
     WAITER_MODEL_PATH,
+    build_prediction_features_from_history,
     load_metadata,
     postprocess_prediction,
     preprocess_features,
@@ -20,18 +19,17 @@ from ml_utils import (
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Predict Smart-Shift shift requirement recommendations."
+        description="Predict Smart-Shift waiter demand recommendations."
     )
     parser.add_argument(
         "--input-file",
         type=Path,
-        help="JSON file containing a shift object or a list of shift objects.",
+        help="JSON file containing { shifts: [] } or a single shift object.",
     )
     parser.add_argument("--shift-id", type=int)
     parser.add_argument("--day-of-week", type=int)
     parser.add_argument("--shift-type", choices=["morning", "evening"])
     parser.add_argument("--is-weekend", action="store_true")
-    parser.add_argument("--expected-customer-load", type=int)
     return parser
 
 
@@ -54,7 +52,6 @@ def load_input(args: argparse.Namespace) -> list[dict[str, Any]]:
     required = {
         "day_of_week": args.day_of_week,
         "shift_type": args.shift_type,
-        "expected_customer_load": args.expected_customer_load,
     }
     missing = [key for key, value in required.items() if value is None]
 
@@ -71,47 +68,33 @@ def load_input(args: argparse.Namespace) -> list[dict[str, Any]]:
             "day_of_week": args.day_of_week,
             "shift_type": args.shift_type,
             "is_weekend": args.is_weekend,
-            "expected_customer_load": args.expected_customer_load,
         }
     ]
 
 
-def validate_models_exist() -> None:
+def validate_model_exists() -> None:
     missing = [
-        path
-        for path in [WAITER_MODEL_PATH, STRENGTH_MODEL_PATH, METADATA_PATH]
-        if not path.exists()
+        path for path in [WAITER_MODEL_PATH, METADATA_PATH] if not path.exists()
     ]
 
     if missing:
-        raise FileNotFoundError(
-            "Missing trained model files: "
-            + ", ".join(str(path) for path in missing)
-            + ". Run train_shift_requirements_model.py first."
-        )
+        raise FileNotFoundError("ML model not trained yet.")
 
 
 def main() -> None:
     args = build_parser().parse_args()
-    validate_models_exist()
+    validate_model_exists()
 
     shifts = load_input(args)
-    dataframe = pd.DataFrame(shifts)
-    features = preprocess_features(dataframe)
+    prediction_dataframe = build_prediction_features_from_history(shifts)
+    features = preprocess_features(prediction_dataframe)
     metadata = load_metadata()
-
-    waiter_model = joblib.load(WAITER_MODEL_PATH)
-    strength_model = joblib.load(STRENGTH_MODEL_PATH)
-
-    waiter_predictions = waiter_model.predict(features)
-    strength_predictions = strength_model.predict(features)
+    model = joblib.load(WAITER_MODEL_PATH)
+    waiter_predictions = model.predict(features)
     predictions = []
 
     for index, shift in enumerate(shifts):
-        prediction = postprocess_prediction(
-            waiter_predictions[index],
-            strength_predictions[index],
-        )
+        prediction = postprocess_prediction(waiter_predictions[index])
         predictions.append(
             {
                 "shift_id": shift.get("shift_id"),

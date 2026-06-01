@@ -1,26 +1,25 @@
 {
-  "model_version": "shift_requirements_rf_v1",
-  "trained_at": "2026-05-30T11:15:52.257340+00:00",
-  "row_count": 70,
+  "model_version": "waiter_demand_rf_v2",
+  "training_status": "success",
+  "trained_at": "2026-06-01T17:13:49.980209+00:00",
+  "row_count": 729,
+  "synthetic_row_count": 728,
+  "real_row_count": 1,
   "feature_names": [
     "day_of_week",
     "is_weekend",
-    "expected_customer_load",
+    "avg_waiters_needed_same_day_shift",
+    "avg_customers_same_day_shift",
     "shift_type_morning",
     "shift_type_evening"
   ],
-  "target_names": [
-    "actual_waiters_count",
-    "actual_strength_score"
-  ],
+  "target_name": "actual_waiters_needed",
+  "model_file_path": "C:\\Users\\Ori\\Documents\\GitHub\\smart-shift\\ml\\models\\waiter_demand_model.joblib",
+  "model_format": "joblib",
   "metrics": {
     "waiter_demand_model": {
-      "mae": 0.107,
-      "rmse": 0.207
-    },
-    "strength_demand_model": {
-      "mae": 0.887,
-      "rmse": 1.296
+      "mae": 0.518,
+      "rmse": 0.727
     }
   }
 }

@@ -200,61 +200,46 @@
           </header>
 
           <section class="finish-feedback">
-            <fieldset>
-              <legend>What was the actual customer load?</legend>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.actualCustomerLoad === 'low'">
-                <input type="radio" name="actualCustomerLoad" [checked]="finishShiftFeedback.actualCustomerLoad === 'low'" (change)="updateFinishShiftFeedback('actualCustomerLoad', 'low')" />
-                Low
-              </label>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.actualCustomerLoad === 'normal'">
-                <input type="radio" name="actualCustomerLoad" [checked]="finishShiftFeedback.actualCustomerLoad === 'normal'" (change)="updateFinishShiftFeedback('actualCustomerLoad', 'normal')" />
-                Normal
-              </label>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.actualCustomerLoad === 'high'">
-                <input type="radio" name="actualCustomerLoad" [checked]="finishShiftFeedback.actualCustomerLoad === 'high'" (change)="updateFinishShiftFeedback('actualCustomerLoad', 'high')" />
-                High
-              </label>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.actualCustomerLoad === 'extreme'">
-                <input type="radio" name="actualCustomerLoad" [checked]="finishShiftFeedback.actualCustomerLoad === 'extreme'" (change)="updateFinishShiftFeedback('actualCustomerLoad', 'extreme')" />
-                Extreme
-              </label>
-            </fieldset>
+            <div class="finish-feedback__scheduled">
+              <span>Scheduled waiters: {{ getPendingFinishShiftAssignedCount('waiter') }}</span>
+              <span>Scheduled bartenders: {{ getPendingFinishShiftAssignedCount('bartender') }}</span>
+              <span>Scheduled shift managers: {{ getPendingFinishShiftAssignedCount('shift_leader') }}</span>
+            </div>
 
-            <fieldset>
-              <legend>Was the number of waiters suitable?</legend>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.waiterSuitability === 'needs_more_waiters'">
-                <input type="radio" name="waiterSuitability" [checked]="finishShiftFeedback.waiterSuitability === 'needs_more_waiters'" (change)="updateFinishShiftFeedback('waiterSuitability', 'needs_more_waiters')" />
-                Too few
-              </label>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.waiterSuitability === 'suitable'">
-                <input type="radio" name="waiterSuitability" [checked]="finishShiftFeedback.waiterSuitability === 'suitable'" (change)="updateFinishShiftFeedback('waiterSuitability', 'suitable')" />
-                Suitable
-              </label>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.waiterSuitability === 'too_many_waiters'">
-                <input type="radio" name="waiterSuitability" [checked]="finishShiftFeedback.waiterSuitability === 'too_many_waiters'" (change)="updateFinishShiftFeedback('waiterSuitability', 'too_many_waiters')" />
-                Too many
-              </label>
-            </fieldset>
+            <label class="finish-feedback__field">
+              Actual customers
+              <input
+                type="number"
+                min="1"
+                [value]="finishShiftFeedback.actualCustomers || ''"
+                (input)="updateFinishShiftFeedback('actualCustomers', $event)"
+                required
+              />
+            </label>
 
-            <fieldset>
-              <legend>How did the team perform?</legend>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.teamPerformance === 'weak'">
-                <input type="radio" name="teamPerformance" [checked]="finishShiftFeedback.teamPerformance === 'weak'" (change)="updateFinishShiftFeedback('teamPerformance', 'weak')" />
-                Weak
-              </label>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.teamPerformance === 'reasonable'">
-                <input type="radio" name="teamPerformance" [checked]="finishShiftFeedback.teamPerformance === 'reasonable'" (change)="updateFinishShiftFeedback('teamPerformance', 'reasonable')" />
-                Reasonable
-              </label>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.teamPerformance === 'good'">
-                <input type="radio" name="teamPerformance" [checked]="finishShiftFeedback.teamPerformance === 'good'" (change)="updateFinishShiftFeedback('teamPerformance', 'good')" />
-                Good
-              </label>
-              <label class="finish-feedback__option" [class.finish-feedback__option--selected]="finishShiftFeedback.teamPerformance === 'excellent'">
-                <input type="radio" name="teamPerformance" [checked]="finishShiftFeedback.teamPerformance === 'excellent'" (change)="updateFinishShiftFeedback('teamPerformance', 'excellent')" />
-                Excellent
-              </label>
-            </fieldset>
+            <label class="finish-feedback__field">
+              Actual waiters needed
+              <input
+                type="number"
+                min="1"
+                [value]="finishShiftFeedback.actualWaitersNeeded || ''"
+                (input)="updateFinishShiftFeedback('actualWaitersNeeded', $event)"
+                required
+              />
+            </label>
+
+            <label class="finish-feedback__field">
+              Manager rating
+              <input
+                type="number"
+                min="1"
+                max="5"
+                step="1"
+                [value]="finishShiftFeedback.managerRating || ''"
+                (input)="updateFinishShiftFeedback('managerRating', $event)"
+                required
+              />
+            </label>
           </section>
 
           <div class="schedule-dialog-actions">

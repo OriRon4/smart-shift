@@ -73,21 +73,10 @@ export interface ShiftRequirementsUpdate {
   requiredStrengthScore: number;
 }
 
-export type FinishShiftCustomerLoad = 'low' | 'normal' | 'high' | 'extreme';
-export type FinishShiftWaiterSuitability =
-  | 'needs_more_waiters'
-  | 'suitable'
-  | 'too_many_waiters';
-export type FinishShiftTeamPerformance =
-  | 'weak'
-  | 'reasonable'
-  | 'good'
-  | 'excellent';
-
 export interface FinishShiftFeedback {
-  actualCustomerLoad: FinishShiftCustomerLoad;
-  waiterSuitability: FinishShiftWaiterSuitability;
-  teamPerformance: FinishShiftTeamPerformance;
+  actualCustomers: number | null;
+  actualWaitersNeeded: number | null;
+  managerRating: number | null;
 }
 
 export interface ShiftMlPrediction {

@@ -1,0 +1,6 @@
+{
+  "training_status": "success",
+  "model_version": "waiter_demand_rf_v2",
+  "trained_at": "2026-06-01T17:13:49.980209+00:00",
+  "row_count": 729
+}

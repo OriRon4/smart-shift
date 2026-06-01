@@ -139,36 +139,59 @@ CREATE INDEX idx_schedule_assignments_employee_id
 
 CREATE TABLE shift_performance_logs (
   id INT NOT NULL AUTO_INCREMENT,
+  shift_id INT NULL,
   shift_date DATE NOT NULL,
   shift_type ENUM('morning', 'evening') NOT NULL,
   day_of_week TINYINT UNSIGNED NOT NULL,
   is_weekend BOOLEAN NOT NULL,
-  expected_customer_load INT UNSIGNED NOT NULL,
-  actual_waiters_count INT UNSIGNED NOT NULL,
-  actual_strength_score DECIMAL(6,2) NOT NULL,
-  manager_rating DECIMAL(3,1) NOT NULL,
+  scheduled_waiters INT UNSIGNED NOT NULL DEFAULT 0,
+  actual_customers INT UNSIGNED NOT NULL,
+  actual_waiters_needed INT UNSIGNED NOT NULL,
+  manager_rating TINYINT UNSIGNED NOT NULL,
+  waiter_gap INT NOT NULL,
+  was_understaffed BOOLEAN NOT NULL,
+  was_overstaffed BOOLEAN NOT NULL,
+  is_synthetic BOOLEAN NOT NULL DEFAULT FALSE,
+  expected_customer_load INT UNSIGNED NULL,
+  actual_waiters_count INT UNSIGNED NULL,
+  actual_strength_score DECIMAL(6,2) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
+  CONSTRAINT uq_shift_performance_logs_shift_id
+    UNIQUE (shift_id),
   CONSTRAINT uq_shift_performance_logs_shift_date_type
     UNIQUE (shift_date, shift_type),
+  CONSTRAINT fk_shift_performance_logs_shift_id
+    FOREIGN KEY (shift_id) REFERENCES shifts (id)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE,
   CONSTRAINT chk_shift_performance_logs_day_of_week
     CHECK (day_of_week BETWEEN 0 AND 6),
-  CONSTRAINT chk_shift_performance_logs_expected_customer_load
-    CHECK (expected_customer_load BETWEEN 1 AND 1000),
-  CONSTRAINT chk_shift_performance_logs_actual_strength_score
-    CHECK (actual_strength_score BETWEEN 0 AND 100),
+  CONSTRAINT chk_shift_performance_logs_scheduled_waiters
+    CHECK (scheduled_waiters >= 0),
+  CONSTRAINT chk_shift_performance_logs_actual_customers
+    CHECK (actual_customers > 0),
+  CONSTRAINT chk_shift_performance_logs_actual_waiters_needed
+    CHECK (actual_waiters_needed > 0),
   CONSTRAINT chk_shift_performance_logs_manager_rating
-    CHECK (manager_rating BETWEEN 1 AND 10),
+    CHECK (manager_rating BETWEEN 1 AND 5),
+  CONSTRAINT chk_shift_performance_logs_expected_customer_load
+    CHECK (expected_customer_load IS NULL OR expected_customer_load BETWEEN 1 AND 1000),
+  CONSTRAINT chk_shift_performance_logs_actual_strength_score
+    CHECK (actual_strength_score IS NULL OR actual_strength_score BETWEEN 0 AND 100),
   INDEX idx_shift_performance_logs_shift_pattern
-    (day_of_week, shift_type, is_weekend)
+    (day_of_week, shift_type, is_weekend),
+  INDEX idx_shift_performance_logs_synthetic
+    (is_synthetic)
 ) ENGINE=InnoDB;
 
 CREATE TABLE shift_ml_predictions (
   id INT NOT NULL AUTO_INCREMENT,
   shift_id INT NOT NULL,
   recommended_waiters INT UNSIGNED NOT NULL,
-  recommended_strength_score DECIMAL(6,2) NOT NULL,
-  model_version VARCHAR(80) NOT NULL DEFAULT 'shift_requirements_demo_v1',
+  recommended_strength_score DECIMAL(6,2) NULL,
+  model_version VARCHAR(80) NOT NULL DEFAULT 'waiter_demand_rf_v2',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   CONSTRAINT uq_shift_ml_predictions_shift_id
@@ -176,7 +199,7 @@ CREATE TABLE shift_ml_predictions (
   CONSTRAINT chk_shift_ml_predictions_recommended_waiters
     CHECK (recommended_waiters > 0),
   CONSTRAINT chk_shift_ml_predictions_recommended_strength_score
-    CHECK (recommended_strength_score BETWEEN 0 AND 100),
+    CHECK (recommended_strength_score IS NULL OR recommended_strength_score BETWEEN 0 AND 100),
   CONSTRAINT fk_shift_ml_predictions_shift_id
     FOREIGN KEY (shift_id) REFERENCES shifts (id)
     ON DELETE CASCADE

@@ -18,7 +18,8 @@ async function getPerformanceAverages() {
       SELECT
         day_of_week,
         shift_type,
-        AVG(expected_customer_load) AS expected_customer_load
+        AVG(actual_waiters_needed) AS avg_waiters_needed,
+        AVG(actual_customers) AS avg_customers
       FROM shift_performance_logs
       GROUP BY day_of_week, shift_type
     `
@@ -27,7 +28,8 @@ async function getPerformanceAverages() {
     `
       SELECT
         shift_type,
-        AVG(expected_customer_load) AS expected_customer_load
+        AVG(actual_waiters_needed) AS avg_waiters_needed,
+        AVG(actual_customers) AS avg_customers
       FROM shift_performance_logs
       GROUP BY shift_type
     `
@@ -35,7 +37,8 @@ async function getPerformanceAverages() {
   const [overallRows] = await pool.query(
     `
       SELECT
-        AVG(expected_customer_load) AS expected_customer_load
+        AVG(actual_waiters_needed) AS avg_waiters_needed,
+        AVG(actual_customers) AS avg_customers
       FROM shift_performance_logs
     `
   );
@@ -55,7 +58,7 @@ async function savePredictions(predictions) {
   const values = predictions.map((prediction) => [
     prediction.shiftId,
     prediction.recommendedWaiters,
-    prediction.recommendedStrengthScore,
+    prediction.recommendedStrengthScore ?? null,
     prediction.modelVersion,
   ]);
 
@@ -145,7 +148,10 @@ async function getPredictionByShiftId(shiftId) {
   return {
     shiftId: row.shift_id,
     recommendedWaiters: Number(row.recommended_waiters),
-    recommendedStrengthScore: Number(row.recommended_strength_score),
+    recommendedStrengthScore:
+      row.recommended_strength_score === null
+        ? null
+        : Number(row.recommended_strength_score),
     modelVersion: row.model_version,
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
   };
@@ -156,19 +162,24 @@ async function getPerformanceLogByShift(shift) {
     `
       SELECT
         id,
+        shift_id,
         shift_date,
         shift_type,
-        expected_customer_load,
-        actual_waiters_count,
-        actual_strength_score,
+        scheduled_waiters,
+        actual_customers,
+        actual_waiters_needed,
         manager_rating,
+        waiter_gap,
+        was_understaffed,
+        was_overstaffed,
+        is_synthetic,
         created_at
       FROM shift_performance_logs
-      WHERE shift_date = ?
-        AND shift_type = ?
+      WHERE shift_id = ?
+        OR (shift_id IS NULL AND shift_date = ? AND shift_type = ? AND is_synthetic = FALSE)
       LIMIT 1
     `,
-    [formatDateKey(shift.shift_date), shift.shift_type]
+    [shift.id, formatDateKey(shift.shift_date), shift.shift_type]
   );
 
   return rows[0] || null;
@@ -178,26 +189,59 @@ async function saveShiftPerformanceLog(log) {
   const [result] = await pool.query(
     `
       INSERT INTO shift_performance_logs (
+        shift_id,
         shift_date,
         shift_type,
         day_of_week,
         is_weekend,
+        scheduled_waiters,
+        actual_customers,
+        actual_waiters_needed,
+        manager_rating,
+        waiter_gap,
+        was_understaffed,
+        was_overstaffed,
+        is_synthetic,
         expected_customer_load,
         actual_waiters_count,
-        actual_strength_score,
-        manager_rating
+        actual_strength_score
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        shift_date = VALUES(shift_date),
+        shift_type = VALUES(shift_type),
+        day_of_week = VALUES(day_of_week),
+        is_weekend = VALUES(is_weekend),
+        scheduled_waiters = VALUES(scheduled_waiters),
+        actual_customers = VALUES(actual_customers),
+        actual_waiters_needed = VALUES(actual_waiters_needed),
+        manager_rating = VALUES(manager_rating),
+        waiter_gap = VALUES(waiter_gap),
+        was_understaffed = VALUES(was_understaffed),
+        was_overstaffed = VALUES(was_overstaffed),
+        is_synthetic = VALUES(is_synthetic),
+        expected_customer_load = VALUES(expected_customer_load),
+        actual_waiters_count = VALUES(actual_waiters_count),
+        actual_strength_score = VALUES(actual_strength_score),
+        updated_at = CURRENT_TIMESTAMP
     `,
     [
+      log.shiftId,
       log.shiftDate,
       log.shiftType,
       log.dayOfWeek,
       log.isWeekend,
-      log.expectedCustomerLoad,
-      log.actualWaitersCount,
-      log.actualStrengthScore,
+      log.scheduledWaiters,
+      log.actualCustomers,
+      log.actualWaitersNeeded,
       log.managerRating,
+      log.waiterGap,
+      log.wasUnderstaffed,
+      log.wasOverstaffed,
+      log.isSynthetic,
+      log.actualCustomers,
+      log.actualWaitersNeeded,
+      log.actualStrengthScore ?? null,
     ]
   );
 

@@ -38,56 +38,16 @@ function isWeekend(dayOfWeek) {
   return dayOfWeek === 5 || dayOfWeek === 6;
 }
 
-function buildAverageLookup(averages) {
-  const byPattern = new Map(
-    averages.byPattern.map((row) => [
-      `${row.day_of_week}:${row.shift_type}`,
-      {
-        expectedCustomerLoad: Number(row.expected_customer_load),
-      },
-    ])
-  );
-  const byShiftType = new Map(
-    averages.byShiftType.map((row) => [
-      row.shift_type,
-      {
-        expectedCustomerLoad: Number(row.expected_customer_load),
-      },
-    ])
-  );
-  const overall = averages.overall
-    ? {
-        expectedCustomerLoad: Number(averages.overall.expected_customer_load),
-      }
-    : null;
-
-  return {
-    get(dayOfWeek, shiftType) {
-      return (
-        byPattern.get(`${dayOfWeek}:${shiftType}`) ||
-        byShiftType.get(shiftType) ||
-        overall || {
-          expectedCustomerLoad: shiftType === "morning" ? 100 : 160,
-        }
-      );
-    },
-  };
-}
-
-function buildPredictionInput(shifts, averages) {
-  const lookup = buildAverageLookup(averages);
-
+function buildPredictionInput(shifts) {
   return shifts.map((shift) => {
     const shiftDate = formatDateKey(shift.shift_date);
     const dayOfWeek = getDayOfWeek(shiftDate);
-    const defaults = lookup.get(dayOfWeek, shift.shift_type);
 
     return {
       shift_id: shift.id,
       day_of_week: dayOfWeek,
       shift_type: shift.shift_type,
       is_weekend: isWeekend(dayOfWeek),
-      expected_customer_load: Math.round(defaults.expectedCustomerLoad),
     };
   });
 }
@@ -121,9 +81,14 @@ async function runPythonPrediction(shifts) {
 
     return JSON.parse(stdout);
   } catch (error) {
+    const detail = String(error.stderr || error.message || "");
+    const message = detail.includes("ML model not trained yet")
+      ? "ML model not trained yet. Please finish a shift or run training first."
+      : "ML prediction failed. Train the model and try again.";
+
     throw createHttpError(
       500,
-      "ML prediction failed. Train the models and try again.",
+      message,
       error.message
     );
   } finally {
@@ -134,9 +99,11 @@ async function runPythonPrediction(shifts) {
 function normalizePrediction(rawPrediction) {
   const shiftId = Number(rawPrediction.shift_id);
   const recommendedWaiters = Number(rawPrediction.recommended_waiters);
-  const recommendedStrengthScore = Number(
-    rawPrediction.recommended_strength_score
-  );
+  const recommendedStrengthScore =
+    rawPrediction.recommended_strength_score === undefined ||
+    rawPrediction.recommended_strength_score === null
+      ? null
+      : Number(rawPrediction.recommended_strength_score);
 
   if (!Number.isInteger(shiftId) || shiftId <= 0) {
     throw createHttpError(500, "ML prediction returned an invalid shift id");
@@ -147,9 +114,10 @@ function normalizePrediction(rawPrediction) {
   }
 
   if (
-    !Number.isFinite(recommendedStrengthScore) ||
-    recommendedStrengthScore < 0 ||
-    recommendedStrengthScore > 100
+    recommendedStrengthScore !== null &&
+    (!Number.isFinite(recommendedStrengthScore) ||
+      recommendedStrengthScore < 0 ||
+      recommendedStrengthScore > 100)
   ) {
     throw createHttpError(500, "ML prediction returned invalid strength score");
   }
@@ -167,8 +135,7 @@ async function predictWeek(weekStartDate) {
   const shifts = await scheduleRepository.ensureWeeklyShifts(
     weekRange.weekStartDate
   );
-  const averages = await mlRepository.getPerformanceAverages();
-  const predictionInput = buildPredictionInput(shifts, averages);
+  const predictionInput = buildPredictionInput(shifts);
   const predictionResult = await runPythonPrediction(predictionInput);
   const predictions = (predictionResult.predictions || []).map(
     normalizePrediction
@@ -226,7 +193,10 @@ async function applyPrediction(shiftId, user) {
       requiredWaiters: prediction.recommendedWaiters,
       requiredBartenders: Number(shift.required_bartenders),
       requiredShiftLeaders: Number(shift.required_shift_leaders),
-      requiredStrengthScore: prediction.recommendedStrengthScore,
+      requiredStrengthScore:
+        prediction.recommendedStrengthScore === null
+          ? Number(shift.required_strength_score)
+          : prediction.recommendedStrengthScore,
     },
     user
   );

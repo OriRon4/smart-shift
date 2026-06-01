@@ -1167,16 +1167,35 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
 
   protected updateFinishShiftFeedback(
     fieldName: keyof FinishShiftFeedback,
-    value: FinishShiftFeedback[keyof FinishShiftFeedback]
+    value: FinishShiftFeedback[keyof FinishShiftFeedback] | Event
   ): void {
+    const nextValue =
+      value instanceof Event
+        ? this.readPositiveNumberInput(value)
+        : value;
+
     this.finishShiftFeedback = {
       ...this.finishShiftFeedback,
-      [fieldName]: value,
+      [fieldName]: nextValue,
     };
   }
 
   protected submitFinishShiftFeedback(): void {
     if (!this.pendingFinishShift) {
+      return;
+    }
+
+    if (
+      !this.finishShiftFeedback.actualCustomers ||
+      this.finishShiftFeedback.actualCustomers <= 0 ||
+      !this.finishShiftFeedback.actualWaitersNeeded ||
+      this.finishShiftFeedback.actualWaitersNeeded <= 0 ||
+      !this.finishShiftFeedback.managerRating ||
+      this.finishShiftFeedback.managerRating < 1 ||
+      this.finishShiftFeedback.managerRating > 5
+    ) {
+      this.actionErrorMessage =
+        'Enter actual customers, waiters needed, and manager rating.';
       return;
     }
 
@@ -1193,7 +1212,9 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
             this.board = board;
           }
 
-          this.successMessage = 'Shift feedback saved for ML training.';
+          this.successMessage =
+            board.message ||
+            'Shift finished successfully. ML model update started in the background.';
           this.closeFinishShiftDialog();
           this.isLoading = false;
         },
@@ -1202,6 +1223,18 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
           this.isLoading = false;
         }
       });
+  }
+
+  protected getPendingFinishShiftAssignedCount(jobRole: JobRole): number {
+    if (!this.pendingFinishShift) {
+      return 0;
+    }
+
+    return (
+      this.pendingFinishShift.shift.roleGroups.find(
+        (roleGroup) => roleGroup.jobRole === jobRole
+      )?.assignedCount || 0
+    );
   }
 
   protected get validationStatusLabel(): string {
@@ -1510,11 +1543,7 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
   private setMlPredictions(predictions: ShiftMlPrediction[]): void {
     this.mlPredictionsByShiftId = new Map(
       predictions
-        .filter(
-          (prediction) =>
-            prediction.recommendedWaiters !== null &&
-            prediction.recommendedStrengthScore !== null
-        )
+        .filter((prediction) => prediction.recommendedWaiters !== null)
         .map((prediction) => [prediction.shiftId, prediction])
     );
   }
@@ -1545,19 +1574,10 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
     }
 
     const recommendedWaiters = Number(prediction.recommendedWaiters);
-    const recommendedStrengthScore = Number(prediction.recommendedStrengthScore);
+    const requiredStrengthScore = this.getShiftRequiredStrengthScore(shift);
 
     if (!Number.isInteger(recommendedWaiters) || recommendedWaiters <= 0) {
       this.actionErrorMessage = 'ML recommendation returned an invalid waiter count.';
-      return null;
-    }
-
-    if (
-      !Number.isFinite(recommendedStrengthScore) ||
-      recommendedStrengthScore < 0 ||
-      recommendedStrengthScore > 100
-    ) {
-      this.actionErrorMessage = 'ML recommendation returned an invalid strength score.';
       return null;
     }
 
@@ -1566,7 +1586,7 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
       requiredWaiters: recommendedWaiters,
       requiredBartenders: this.getShiftRequiredCount(shift, 'bartender'),
       requiredShiftLeaders: this.getShiftRequiredCount(shift, 'shift_leader'),
-      requiredStrengthScore: recommendedStrengthScore,
+      requiredStrengthScore,
     };
   }
 
@@ -1608,16 +1628,32 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
 
   private createDefaultFinishShiftFeedback(): FinishShiftFeedback {
     return {
-      actualCustomerLoad: 'normal',
-      waiterSuitability: 'suitable',
-      teamPerformance: 'good',
+      actualCustomers: null,
+      actualWaitersNeeded: null,
+      managerRating: null,
     };
+  }
+
+  private readPositiveNumberInput(event: Event): number | null {
+    const input = event.target as HTMLInputElement | null;
+    const value = Number(input?.value);
+
+    return Number.isFinite(value) && value > 0 ? value : null;
   }
 
   private getShiftRequiredCount(shift: ScheduleShift, jobRole: JobRole): number {
     return (
       shift.roleGroups.find((roleGroup) => roleGroup.jobRole === jobRole)
         ?.requiredCount || 0
+    );
+  }
+
+  private getShiftRequiredStrengthScore(shift: ScheduleShift): number {
+    return (
+      shift.requiredStrengthScore ??
+      shift.roleGroups.find((roleGroup) => roleGroup.jobRole === 'waiter')
+        ?.requiredStrengthScore ??
+      0
     );
   }
 

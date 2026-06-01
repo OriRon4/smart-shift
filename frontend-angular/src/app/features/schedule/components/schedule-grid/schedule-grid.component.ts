@@ -151,8 +151,7 @@ export class ScheduleGridComponent implements OnChanges {
 
     if (
       !prediction ||
-      prediction.recommendedWaiters === null ||
-      prediction.recommendedStrengthScore === null
+      prediction.recommendedWaiters === null
     ) {
       return null;
     }

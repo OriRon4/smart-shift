@@ -108,7 +108,10 @@
                           <section class="shift-ml-recommendation">
                             <span>ML recommendation</span>
                             <strong>
-                              {{ prediction.recommendedWaiters }} waiters · Strength {{ prediction.recommendedStrengthScore }}
+                              {{ prediction.recommendedWaiters }} waiters
+                              @if (prediction.recommendedStrengthScore !== null) {
+                                · Strength {{ prediction.recommendedStrengthScore }}
+                              }
                             </strong>
                             <small>Manager approval required before applying.</small>
                             <button type="button" (click)="requestApplyMlPrediction(shift)">Apply ML Recommendation</button>
