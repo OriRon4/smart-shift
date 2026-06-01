@@ -46,6 +46,10 @@ export class EmployeesApiService {
       );
   }
 
+  deleteEmployee(employeeId: number): Observable<void> {
+    return this.http.delete<void>(`${this.apiUrl}/${employeeId}`);
+  }
+
   private normalizeEmployee(employee: Employee): Employee {
     const jobRole =
       employee.jobRole || (employee.role === 'employee' ? undefined : employee.role);

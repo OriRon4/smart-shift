@@ -86,7 +86,17 @@
 
         <div class="employee-card__fields">
           <label>
-            Name
+            Username
+            <input
+              type="text"
+              name="username"
+              [value]="editableEmployee.username || ''"
+              disabled
+            />
+          </label>
+
+          <label>
+            Full name
             <input
               type="text"
               name="fullName"
@@ -108,6 +118,17 @@
                 <option [value]="jobRole">{{ formatJobRole(jobRole) }}</option>
               }
             </select>
+          </label>
+
+          <label>
+            Email
+            <input
+              type="email"
+              name="email"
+              [value]="editableEmployee.email || ''"
+              (input)="updateStringField('email', $event)"
+              [disabled]="!canEdit()"
+            />
           </label>
 
           <label>
@@ -208,6 +229,14 @@
 
         @if (canEdit()) {
           <button type="submit" [disabled]="isLoading">{{ saveEmployeeButtonLabel }}</button>
+          <button
+            type="button"
+            class="employee-card__delete-action"
+            (click)="deleteEmployee()"
+            [disabled]="isLoading"
+          >
+            Delete employee
+          </button>
         }
       </form>
     } @else if (!canViewDetails()) {

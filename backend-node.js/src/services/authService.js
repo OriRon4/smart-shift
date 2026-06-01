@@ -7,7 +7,9 @@ const { createHttpError } = require("../utils/errors");
 const BCRYPT_ROUNDS = 12;
 const JWT_EXPIRES_IN = "8h";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_PATTERN = /^[0-9+\-\s()]{7,30}$/;
+const PHONE_PATTERN = /^05\d{8}$/;
+const PHONE_ERROR_MESSAGE = "Phone number must be 10 digits and start with 05.";
+const FULL_NAME_ERROR_MESSAGE = "Please enter both first and last name.";
 
 function buildToken(user) {
   // JWT מכיל מזהים והרשאה כדי לזהות את המשתמש בבקשות הבאות.
@@ -90,12 +92,12 @@ async function verifyPassword(user, password) {
 function normalizeWorkerRegistration(body) {
   const fullName = String(body.fullName || "").trim();
   const email = String(body.email || "").trim().toLowerCase();
-  const phoneNumber = String(body.phoneNumber || body.phone_number || "").trim();
+  const phoneNumber = normalizePhoneNumber(body.phoneNumber || body.phone_number);
   const username = String(body.username || email.split("@")[0] || "").trim();
   const password = String(body.password || "").trim();
 
-  if (!fullName) {
-    throw createHttpError(400, "fullName is required");
+  if (!hasFirstAndLastName(fullName)) {
+    throw createHttpError(400, FULL_NAME_ERROR_MESSAGE);
   }
 
   if (!EMAIL_PATTERN.test(email)) {
@@ -103,7 +105,7 @@ function normalizeWorkerRegistration(body) {
   }
 
   if (!PHONE_PATTERN.test(phoneNumber)) {
-    throw createHttpError(400, "A valid phone number is required");
+    throw createHttpError(400, PHONE_ERROR_MESSAGE);
   }
 
   if (!username) {
@@ -157,6 +159,14 @@ async function registerWorker(body) {
     message: "Account created. Your account is pending manager approval.",
     user: sanitizeUser(user),
   };
+}
+
+function normalizePhoneNumber(value) {
+  return String(value || "").replace(/[\s-]/g, "").trim();
+}
+
+function hasFirstAndLastName(fullName) {
+  return fullName.split(/\s+/).filter(Boolean).length >= 2;
 }
 
 async function getUserByToken(token) {

@@ -5,6 +5,9 @@ import { Router } from '@angular/router';
 import { AuthService } from '../../../../core/auth/auth.service';
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^05\d{8}$/;
+const PHONE_ERROR_MESSAGE = 'Phone number must be 10 digits and start with 05.';
+const FULL_NAME_ERROR_MESSAGE = 'Please enter both first and last name.';
 
 @Component({
   selector: 'app-login',
@@ -20,6 +23,8 @@ export class LoginComponent {
   protected registerEmail = '';
   protected registerUsername = '';
   protected registerPassword = '';
+  protected showLoginPassword = false;
+  protected showRegisterPassword = false;
   protected isRegisterMode = false;
   protected isLoading = false;
   protected errorMessage = '';
@@ -65,8 +70,21 @@ export class LoginComponent {
   }
 
   registerWorker(): void {
+    const fullName = this.registerFullName.trim();
+    const phoneNumber = this.normalizePhoneNumber(this.registerPhoneNumber);
+
+    if (!this.hasFirstAndLastName(fullName)) {
+      this.errorMessage = FULL_NAME_ERROR_MESSAGE;
+      return;
+    }
+
     if (!EMAIL_PATTERN.test(this.registerEmail.trim())) {
       this.errorMessage = 'Enter a valid email address.';
+      return;
+    }
+
+    if (!PHONE_PATTERN.test(phoneNumber)) {
+      this.errorMessage = PHONE_ERROR_MESSAGE;
       return;
     }
 
@@ -76,8 +94,8 @@ export class LoginComponent {
 
     this.authService
       .registerWorker({
-        fullName: this.registerFullName,
-        phoneNumber: this.registerPhoneNumber,
+        fullName,
+        phoneNumber,
         username: this.registerUsername,
         email: this.registerEmail,
         password: this.registerPassword
@@ -87,6 +105,7 @@ export class LoginComponent {
           this.isLoading = false;
           this.isRegisterMode = false;
           this.successMessage = 'Your account is pending manager approval.';
+          this.clearRegisterForm();
         },
         error: (error: unknown) => {
           this.errorMessage = this.resolveErrorMessage(error);
@@ -115,6 +134,14 @@ export class LoginComponent {
     this.password = (event.target as HTMLInputElement).value;
   }
 
+  protected toggleLoginPasswordVisibility(): void {
+    this.showLoginPassword = !this.showLoginPassword;
+  }
+
+  protected toggleRegisterPasswordVisibility(): void {
+    this.showRegisterPassword = !this.showRegisterPassword;
+  }
+
   protected updateRegisterField(
     fieldName:
       | 'registerFullName'
@@ -137,5 +164,21 @@ export class LoginComponent {
     }
 
     return 'Could not log in. Check that the backend is running and try again.';
+  }
+
+  private normalizePhoneNumber(value: string): string {
+    return value.replace(/[\s-]/g, '').trim();
+  }
+
+  private hasFirstAndLastName(fullName: string): boolean {
+    return fullName.split(/\s+/).filter(Boolean).length >= 2;
+  }
+
+  private clearRegisterForm(): void {
+    this.registerFullName = '';
+    this.registerPhoneNumber = '';
+    this.registerEmail = '';
+    this.registerUsername = '';
+    this.registerPassword = '';
   }
 }

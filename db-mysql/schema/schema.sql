@@ -1,7 +1,7 @@
 CREATE TABLE employees (
   id INT NOT NULL AUTO_INCREMENT,
   full_name VARCHAR(100) NOT NULL,
-  phone_number VARCHAR(30) NOT NULL,
+  phone_number VARCHAR(10) NOT NULL,
   role VARCHAR(30) NOT NULL DEFAULT 'waiter',
   is_active BOOLEAN NOT NULL DEFAULT FALSE,
   setup_status ENUM('pending', 'complete') NOT NULL DEFAULT 'pending',
@@ -22,7 +22,7 @@ CREATE TABLE employees (
   CONSTRAINT chk_employees_seniority_months
     CHECK (seniority_months >= 0),
   CONSTRAINT chk_employees_phone_number
-    CHECK (TRIM(phone_number) <> '')
+    CHECK (phone_number REGEXP '^05[0-9]{8}$')
 ) ENGINE=InnoDB;
 
 CREATE INDEX idx_employees_role_is_active

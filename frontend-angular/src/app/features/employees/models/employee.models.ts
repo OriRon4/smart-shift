@@ -5,6 +5,8 @@ export interface Employee {
   fullName: string;
   phoneNumber?: string;
   phone_number?: string;
+  email?: string | null;
+  username?: string | null;
   jobRole?: JobRole;
   role?: string;
   isActive?: boolean;

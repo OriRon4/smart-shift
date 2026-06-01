@@ -33,8 +33,18 @@ async function updateEmployee(req, res, next) {
   }
 }
 
+async function deleteEmployee(req, res, next) {
+  try {
+    await employeeService.deleteEmployee(Number(req.params.id));
+    res.sendStatus(204);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getEmployees,
   getEmployeeById,
   updateEmployee,
+  deleteEmployee,
 };

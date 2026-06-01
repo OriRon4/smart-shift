@@ -12,5 +12,6 @@ router.use(requireAuth);
 router.get("/", employeeController.getEmployees);
 router.get("/:id", employeeController.getEmployeeById);
 router.patch("/:id", requireManager, employeeController.updateEmployee);
+router.delete("/:id", requireManager, employeeController.deleteEmployee);
 
 module.exports = router;

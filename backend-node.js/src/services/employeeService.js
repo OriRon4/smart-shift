@@ -3,7 +3,12 @@ const { PERMISSION_ROLES, JOB_ROLES } = require("../constants/roles");
 const { createHttpError } = require("../utils/errors");
 
 const ALLOWED_JOB_ROLES = new Set(Object.values(JOB_ROLES));
-const PHONE_PATTERN = /^[0-9+\-\s()]{7,30}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^05\d{8}$/;
+const PHONE_ERROR_MESSAGE = "Phone number must be 10 digits and start with 05.";
+const FULL_NAME_ERROR_MESSAGE = "Please enter both first and last name.";
+const SETUP_ERROR_MESSAGE =
+  "Complete all required employee setup fields before activating this employee.";
 
 function toNamesOnly(employee) {
   return {
@@ -65,38 +70,63 @@ function readNumber(value, fieldName, min, max) {
 
 function normalizeEmployeeUpdate(body) {
   const fullName = String(body.fullName || "").trim();
-  const phoneNumber = String(body.phoneNumber || body.phone_number || "").trim();
+  const email = String(body.email || "").trim().toLowerCase();
+  const phoneNumber = normalizePhoneNumber(body.phoneNumber || body.phone_number);
 
-  if (!fullName) {
-    throw createHttpError(400, "fullName is required");
+  if (!hasFirstAndLastName(fullName)) {
+    throw createHttpError(400, FULL_NAME_ERROR_MESSAGE);
   }
 
   if (!PHONE_PATTERN.test(phoneNumber)) {
-    throw createHttpError(400, "A valid phoneNumber is required");
+    throw createHttpError(400, PHONE_ERROR_MESSAGE);
   }
 
   if (!ALLOWED_JOB_ROLES.has(body.jobRole)) {
     throw createHttpError(400, "jobRole is invalid");
   }
 
+  if (email && !EMAIL_PATTERN.test(email)) {
+    throw createHttpError(400, "A valid email is required");
+  }
+
+  const professionalism = readNumber(body.professionalism, "professionalism", 0, 10);
+  const responsibility = readNumber(body.responsibility, "responsibility", 0, 10);
+  const pressureHandling = readNumber(body.pressureHandling, "pressureHandling", 0, 10);
+  const seniorityMonths = readNumber(body.seniorityMonths, "seniorityMonths", 0, 1200);
+  const potential = readNumber(body.potential, "potential", 0, 10);
+  const isActive = Boolean(body.isActive);
+
   const hasManagerSetup =
-    readNumber(body.professionalism, "professionalism", 0, 10) > 0 &&
-    readNumber(body.responsibility, "responsibility", 0, 10) > 0 &&
-    readNumber(body.pressureHandling, "pressureHandling", 0, 10) > 0 &&
-    readNumber(body.potential, "potential", 0, 10) > 0;
+    professionalism > 0 &&
+    responsibility > 0 &&
+    pressureHandling > 0 &&
+    potential > 0;
+
+  if (isActive && !hasManagerSetup) {
+    throw createHttpError(400, SETUP_ERROR_MESSAGE);
+  }
 
   return {
     fullName,
+    email,
     phoneNumber,
     jobRole: body.jobRole,
-    isActive: Boolean(body.isActive),
+    isActive,
     setupStatus: hasManagerSetup ? "complete" : "pending",
-    professionalism: readNumber(body.professionalism, "professionalism", 0, 10),
-    responsibility: readNumber(body.responsibility, "responsibility", 0, 10),
-    pressureHandling: readNumber(body.pressureHandling, "pressureHandling", 0, 10),
-    seniorityMonths: readNumber(body.seniorityMonths, "seniorityMonths", 0, 1200),
-    potential: readNumber(body.potential, "potential", 0, 10),
+    professionalism,
+    responsibility,
+    pressureHandling,
+    seniorityMonths,
+    potential,
   };
+}
+
+function normalizePhoneNumber(value) {
+  return String(value || "").replace(/[\s-]/g, "").trim();
+}
+
+function hasFirstAndLastName(fullName) {
+  return fullName.split(/\s+/).filter(Boolean).length >= 2;
 }
 
 async function updateEmployee(employeeId, body) {
@@ -107,10 +137,40 @@ async function updateEmployee(employeeId, body) {
   }
 
   const employeeUpdate = normalizeEmployeeUpdate(body || {});
-  const updatedEmployee = await employeeRepository.updateEmployee(
-    employeeId,
-    employeeUpdate
-  );
+
+  if (existingEmployee.username && !employeeUpdate.email) {
+    throw createHttpError(400, "A valid email is required");
+  }
+
+  if (
+    !existingEmployee.isActive &&
+    employeeUpdate.isActive &&
+    !hasAccountSetup(existingEmployee)
+  ) {
+    throw createHttpError(400, SETUP_ERROR_MESSAGE);
+  }
+
+  let updatedEmployee;
+
+  try {
+    if (employeeUpdate.email) {
+      await employeeRepository.updateLinkedUserEmail(
+        employeeId,
+        employeeUpdate.email
+      );
+    }
+
+    updatedEmployee = await employeeRepository.updateEmployee(
+      employeeId,
+      employeeUpdate
+    );
+  } catch (error) {
+    if (error && error.code === "ER_DUP_ENTRY") {
+      throw createHttpError(409, "Username or email already exists");
+    }
+
+    throw error;
+  }
 
   await employeeRepository.updateLinkedUserActiveState(
     employeeId,
@@ -120,8 +180,26 @@ async function updateEmployee(employeeId, body) {
   return updatedEmployee;
 }
 
+async function deleteEmployee(employeeId) {
+  const existingEmployee = await employeeRepository.getEmployeeById(employeeId);
+
+  if (!existingEmployee) {
+    throw createHttpError(404, "Employee not found");
+  }
+
+  await employeeRepository.deleteEmployee(employeeId);
+}
+
+function hasAccountSetup(employee) {
+  const email = String(employee.email || "").trim();
+  const username = String(employee.username || "").trim();
+
+  return EMAIL_PATTERN.test(email) && Boolean(username);
+}
+
 module.exports = {
   getEmployeesForUser,
   getEmployeeByIdForUser,
   updateEmployee,
+  deleteEmployee,
 };

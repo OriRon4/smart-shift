@@ -238,6 +238,13 @@
   color: #7a5216;
 }
 
+.employee-card .employee-card__delete-action {
+  border: 1px solid #ffb4ad;
+  background: #fff1f0;
+  color: #b42318;
+  box-shadow: none;
+}
+
 .employee-card button:disabled {
   cursor: not-allowed;
   opacity: 0.55;

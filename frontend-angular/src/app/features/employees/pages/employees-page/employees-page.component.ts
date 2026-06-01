@@ -12,6 +12,13 @@ import {
   getCurrentWeekStartDate
 } from '../../../../shared/date/week-date.util';
 
+const PHONE_PATTERN = /^05\d{8}$/;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_ERROR_MESSAGE = 'Phone number must be 10 digits and start with 05.';
+const FULL_NAME_ERROR_MESSAGE = 'Please enter both first and last name.';
+const SETUP_ERROR_MESSAGE =
+  'Complete all required employee setup fields before activating this employee.';
+
 @Component({
   selector: 'app-employees-page',
   standalone: true,
@@ -146,11 +153,49 @@ export class EmployeesPageComponent implements OnInit {
       return;
     }
 
+    const phoneNumber = this.normalizePhoneNumber(
+      this.editableEmployee.phoneNumber || this.editableEmployee.phone_number || ''
+    );
+    const fullName = this.editableEmployee.fullName.trim();
+    const email = String(this.editableEmployee.email || '').trim().toLowerCase();
+    const employeeToSave: Employee = {
+      ...this.editableEmployee,
+      fullName,
+      email,
+      phoneNumber,
+      phone_number: phoneNumber
+    };
+
+    if (!this.hasFirstAndLastName(fullName)) {
+      this.errorMessage = FULL_NAME_ERROR_MESSAGE;
+      this.successMessage = '';
+      return;
+    }
+
+    if (!PHONE_PATTERN.test(phoneNumber)) {
+      this.errorMessage = PHONE_ERROR_MESSAGE;
+      this.successMessage = '';
+      return;
+    }
+
+    if (employeeToSave.username && !EMAIL_PATTERN.test(email)) {
+      this.errorMessage = 'A valid email is required';
+      this.successMessage = '';
+      return;
+    }
+
+    if (employeeToSave.isActive && !this.isEmployeeSetupComplete(employeeToSave)) {
+      this.errorMessage = SETUP_ERROR_MESSAGE;
+      this.successMessage = '';
+      return;
+    }
+
+    this.editableEmployee = employeeToSave;
     this.isLoading = true;
     this.errorMessage = '';
     this.successMessage = '';
 
-    this.employeesApiService.updateEmployee(this.editableEmployee).subscribe({
+    this.employeesApiService.updateEmployee(employeeToSave).subscribe({
       next: (response) => {
         this.selectedEmployee = this.normalizeEmployee(response.employee);
         this.editableEmployee = { ...this.selectedEmployee };
@@ -165,8 +210,46 @@ export class EmployeesPageComponent implements OnInit {
     });
   }
 
+  protected deleteEmployee(): void {
+    if (!this.editableEmployee || !this.canEdit()) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Delete ${this.editableEmployee.fullName}? This will remove the employee from employees, availability requests, and saved schedules.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const employeeId = this.editableEmployee.id;
+    this.isLoading = true;
+    this.errorMessage = '';
+    this.successMessage = '';
+
+    this.employeesApiService.deleteEmployee(employeeId).subscribe({
+      next: () => {
+        this.employees = this.employees.filter(
+          (employee) => employee.id !== employeeId
+        );
+        this.selectedEmployee = null;
+        this.editableEmployee = null;
+        this.employeeAvailability = null;
+        this.selectedAvailabilityShiftIds = new Set();
+        this.isAvailabilityReviewOpen = false;
+        this.successMessage = 'Employee deleted.';
+        this.isLoading = false;
+      },
+      error: (error: unknown) => {
+        this.errorMessage = this.resolveErrorMessage(error);
+        this.isLoading = false;
+      }
+    });
+  }
+
   protected updateStringField(
-    fieldName: 'fullName' | 'phoneNumber' | 'jobRole',
+    fieldName: 'fullName' | 'email' | 'phoneNumber' | 'jobRole',
     event: Event
   ): void {
     if (!this.editableEmployee) {
@@ -345,6 +428,27 @@ export class EmployeesPageComponent implements OnInit {
       jobRole: jobRole as Employee['jobRole'],
       role: jobRole,
     };
+  }
+
+  private normalizePhoneNumber(value: string): string {
+    return value.replace(/[\s-]/g, '').trim();
+  }
+
+  private hasFirstAndLastName(fullName: string): boolean {
+    return fullName.split(/\s+/).filter(Boolean).length >= 2;
+  }
+
+  private isEmployeeSetupComplete(employee: Employee): boolean {
+    return (
+      this.hasFirstAndLastName(employee.fullName.trim()) &&
+      PHONE_PATTERN.test(employee.phoneNumber || '') &&
+      Boolean(employee.jobRole) &&
+      this.jobRoles.includes(employee.jobRole as string) &&
+      (employee.professionalism || 0) > 0 &&
+      (employee.responsibility || 0) > 0 &&
+      (employee.pressureHandling || 0) > 0 &&
+      (employee.potential || 0) > 0
+    );
   }
 
   protected get saveEmployeeButtonLabel(): string {
