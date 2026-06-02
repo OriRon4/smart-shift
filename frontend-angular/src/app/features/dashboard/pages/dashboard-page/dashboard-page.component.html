@@ -16,58 +16,134 @@
 
   @if (isManager()) {
     <section class="metric-grid">
-      <article>
-        <span>Total scheduled shifts</span>
-        <strong>{{ totalShiftsThisWeek }}</strong>
+      <article class="metric-card metric-card--green">
+        <span class="metric-card__icon">Post</span>
+        <div>
+          <span>Open posted slots</span>
+          <strong>{{ openPostedSlotCount }}</strong>
+          <small>People can claim</small>
+        </div>
       </article>
-      <article>
-        <span>Missing coverage</span>
-        <strong>{{ missingCoverageShiftCount }}</strong>
+      <article class="metric-card metric-card--orange">
+        <span class="metric-card__icon">Risk</span>
+        <div>
+          <span>Below strength</span>
+          <strong>{{ belowStrengthShiftCount }}</strong>
+          <small>Shifts need coverage</small>
+        </div>
       </article>
-      <article>
-        <span>Below strength</span>
-        <strong>{{ belowStrengthShiftCount }}</strong>
+      <article class="metric-card metric-card--purple">
+        <span class="metric-card__icon">Team</span>
+        <div>
+          <span>Employees assigned</span>
+          <strong>{{ employeesAssignedThisWeek }}</strong>
+          <small>Active this week</small>
+        </div>
       </article>
-      <article>
-        <span>Employees assigned</span>
-        <strong>{{ employeesAssignedThisWeek }}</strong>
-      </article>
-    </section>
-
-    <section class="manager-dashboard-grid">
-      <article class="dashboard-panel dashboard-panel--compact">
-        <header>
-          <h2>Coverage overview</h2>
-          <a routerLink="/schedule">Open board</a>
-        </header>
-
-        @if (hasManagerDashboardData) {
-          <div class="dashboard-snapshot">
-            <strong>{{ coverageSummaryText }}</strong>
-            <span>{{ unfilledSlots }} missing assignment{{ unfilledSlots === 1 ? '' : 's' }}</span>
-          </div>
-        } @else {
-          <p class="dashboard-empty">No saved schedule data for the current week.</p>
-        }
-      </article>
-
-      <article class="dashboard-panel dashboard-panel--compact">
-        <header>
-          <h2>Strength overview</h2>
-        </header>
-
-        @if (hasManagerDashboardData) {
-          <div class="dashboard-snapshot">
-            <strong>{{ strengthRiskGroups }}</strong>
-            <span>role group{{ strengthRiskGroups === 1 ? '' : 's' }} below target</span>
-          </div>
-        } @else {
-          <p class="dashboard-empty">No strength data to show.</p>
-        }
+      <article class="metric-card metric-card--blue">
+        <span class="metric-card__icon">Now</span>
+        <div>
+          <span>Today on shift</span>
+          <strong>{{ todayAssignedTotal }}</strong>
+          <small>Across all roles</small>
+        </div>
       </article>
     </section>
 
-    <section class="manager-dashboard-grid manager-dashboard-grid--wide-left">
+    <section class="manager-dashboard-grid manager-dashboard-grid--deadline-chart">
+      <div class="dashboard-stack">
+        <article class="dashboard-panel availability-deadline-card">
+          <header>
+            <h2>Availability deadline</h2>
+          </header>
+          <div class="dashboard-snapshot">
+            <span>Current deadline</span>
+            <strong>{{ availabilityDeadlineLabel }}</strong>
+          </div>
+          <p>Employees can submit availability until this deadline.</p>
+          <div class="deadline-controls">
+            <label>
+              <span>Day</span>
+              <select [value]="selectedDeadlineDay" (change)="updateDeadlineDay($event)">
+                @for (day of availabilityDeadlineDays; track day) {
+                  <option [value]="day">{{ day }}</option>
+                }
+              </select>
+            </label>
+            <label>
+              <span>Time</span>
+              <select [value]="selectedDeadlineTime" (change)="updateDeadlineTime($event)">
+                @for (time of availabilityDeadlineTimes; track time) {
+                  <option [value]="time">{{ time }}</option>
+                }
+              </select>
+            </label>
+          </div>
+          <button type="button" class="dashboard-button" (click)="changeAvailabilityDeadline()">
+            Change availability deadline
+          </button>
+          @if (availabilityDeadlineMessage) {
+            <p class="dashboard-message">{{ availabilityDeadlineMessage }}</p>
+          }
+        </article>
+
+        <article class="dashboard-panel today-snapshot-card">
+          <header>
+            <h2>Today's staff snapshot</h2>
+          </header>
+
+          <div class="today-role-list">
+            @for (role of todayRoleSnapshots; track role.roleLabel) {
+              <article>
+                <span>{{ role.roleLabel }}</span>
+                <strong>{{ role.assigned }} / {{ role.target }}</strong>
+              </article>
+            } @empty {
+              <p class="dashboard-empty">No staff scheduled for today</p>
+            }
+          </div>
+
+          <p class="today-snapshot-card__footer">
+            {{ todayAssignedTotal }} of {{ todayTargetTotal }} scheduled staff are on shift today.
+          </p>
+        </article>
+      </div>
+
+      <article class="dashboard-panel staffing-chart-card">
+        <header>
+          <div>
+            <h2>Weekly staffing balance</h2>
+            <p>Assigned vs target staffing by day</p>
+          </div>
+          <button type="button" class="dashboard-link-button">This week</button>
+        </header>
+        <div class="staffing-chart staffing-chart--bars">
+          @for (day of weeklyStaffingBalance; track day.date) {
+            <article>
+              <div class="staffing-chart__label">
+                <strong>{{ day.dayName.slice(0, 3) }}</strong>
+                <span>{{ day.assigned }}/{{ day.target }}</span>
+              </div>
+              <div class="staffing-chart__track">
+                <span class="staffing-chart__target" [style.width.%]="getStaffingBarWidth(day.target, maxWeeklyStaffingTarget)"></span>
+                <span class="staffing-chart__assigned" [style.width.%]="getStaffingBarWidth(day.assigned, maxWeeklyStaffingTarget)">
+                  {{ day.assigned }}
+                </span>
+              </div>
+              <span
+                class="status-dot"
+                [class.status-dot--below]="day.isBelowTarget"
+                [class.status-dot--ok]="!day.isBelowTarget"
+              ></span>
+            </article>
+          } @empty {
+            <p class="dashboard-empty">No saved schedule data for the current week.</p>
+          }
+        </div>
+      </article>
+    </section>
+
+    <section class="manager-dashboard-grid manager-dashboard-grid--manager-main">
       <article class="dashboard-panel">
         <header>
           <h2>Shifts that need attention</h2>
@@ -75,23 +151,27 @@
         </header>
 
         <div class="attention-list">
-          @for (shift of shiftsNeedingAttention; track shift.shiftId) {
+          <div class="attention-list__header">
+            <span>Day</span>
+            <span>Shift</span>
+            <span>Issue</span>
+            <span>Status</span>
+          </div>
+          @for (item of managerAttentionItems; track item.key) {
             <article>
               <div>
-                <strong>{{ shift.label }}</strong>
-                <span>
-                  @if (shift.unfilledSlots > 0) {
-                    {{ shift.unfilledSlots }} missing assignment{{ shift.unfilledSlots === 1 ? '' : 's' }}
-                  }
-                  @if (shift.unfilledSlots > 0 && shift.strengthGap > 0) {
-                    -
-                  }
-                  @if (shift.strengthGap > 0) {
-                    Strength gap {{ shift.strengthGap }}
-                  }
-                </span>
+                <strong>{{ item.dayName }}</strong>
               </div>
-              <small>{{ shift.assignedWaiters }}/{{ shift.requiredWaiters }} waiters, strength {{ shift.assignedStrength }}/{{ shift.requiredStrength }}</small>
+              <span>{{ item.shiftType }}</span>
+              <span>{{ item.issue }}</span>
+              <small
+                class="status-badge"
+                [class.status-badge--missing]="item.status === 'missing'"
+                [class.status-badge--strength]="item.status === 'strength'"
+                [class.status-badge--posted]="item.status === 'posted'"
+              >
+                {{ getAttentionStatusLabel(item.status) }}
+              </small>
             </article>
           } @empty {
             <p class="dashboard-empty">No problematic shifts for this week.</p>
@@ -101,7 +181,8 @@
 
       <article class="dashboard-panel">
         <header>
-          <h2>Employee workload</h2>
+          <h2>Top 5 workload gaps</h2>
+          <button type="button" class="dashboard-link-button" (click)="openWorkloadModal()">View all</button>
         </header>
 
         <div class="workload-table">
@@ -110,15 +191,15 @@
             <span>Role</span>
             <span>Assigned</span>
             <span>Target</span>
-            <span>Available</span>
+            <span>Gap</span>
           </div>
-          @for (employee of employeeWorkloadMetrics; track employee.employeeId) {
+          @for (employee of topWorkloadGaps; track employee.employeeId) {
             <div>
               <strong>{{ employee.fullName }}</strong>
               <span>{{ employee.roleLabel }}</span>
               <span>{{ employee.assigned }}</span>
               <span>{{ employee.target }}</span>
-              <span>{{ employee.requested }}</span>
+              <span class="workload-gap workload-gap--negative">{{ getWorkloadGapDisplay(employee) }}</span>
             </div>
           } @empty {
             <p class="dashboard-empty">No workload data for this week.</p>
@@ -151,7 +232,7 @@
           <span>Can submit availability until:</span>
           <strong>{{ availabilityDeadlineLabel }}</strong>
         </div>
-        <a class="dashboard-action-link" routerLink="/availability">Go to Availability</a>
+        <a class="dashboard-button" routerLink="/availability">Go to Availability</a>
       </article>
 
       <article class="dashboard-panel dashboard-panel--compact">
@@ -264,7 +345,7 @@
           <span>Can submit availability until:</span>
           <strong>{{ availabilityDeadlineLabel }}</strong>
         </div>
-        <a class="dashboard-action-link" routerLink="/availability">Go to Availability</a>
+        <a class="dashboard-button" routerLink="/availability">Go to Availability</a>
       </article>
 
       <article class="dashboard-panel dashboard-panel--compact">
@@ -344,6 +425,38 @@
           <button type="button" (click)="confirmFillMissingShift()" [disabled]="isFillingMissingSlot">
             {{ isFillingMissingSlot ? 'Taking...' : 'Yes, take this shift' }}
           </button>
+        </div>
+      </section>
+    </div>
+  }
+
+  @if (isWorkloadModalOpen) {
+    <div class="confirm-backdrop" role="presentation">
+      <section class="confirm-dialog confirm-dialog--wide" role="dialog" aria-modal="true">
+        <header>
+          <h2>All workload gaps</h2>
+          <button type="button" (click)="closeWorkloadModal()">Close</button>
+        </header>
+
+        <div class="workload-table">
+          <div class="workload-table__header">
+            <span>Employee</span>
+            <span>Role</span>
+            <span>Assigned</span>
+            <span>Target</span>
+            <span>Gap</span>
+          </div>
+          @for (employee of allWorkloadGaps; track employee.employeeId) {
+            <div>
+              <strong>{{ employee.fullName }}</strong>
+              <span>{{ employee.roleLabel }}</span>
+              <span>{{ employee.assigned }}</span>
+              <span>{{ employee.target }}</span>
+              <span class="workload-gap workload-gap--negative">{{ getWorkloadGapDisplay(employee) }}</span>
+            </div>
+          } @empty {
+            <p class="dashboard-empty">No workload gaps for this week.</p>
+          }
         </div>
       </section>
     </div>

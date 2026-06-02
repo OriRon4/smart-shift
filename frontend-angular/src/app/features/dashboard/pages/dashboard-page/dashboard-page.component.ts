@@ -55,12 +55,36 @@ interface TodayStaffMember {
   phoneNumber?: string | null;
 }
 
+interface WeeklyStaffingDay {
+  date: string;
+  dayName: string;
+  assigned: number;
+  target: number;
+  isBelowTarget: boolean;
+}
+
+interface ManagerAttentionItem {
+  key: string;
+  dayName: string;
+  shiftType: string;
+  issue: string;
+  status: 'missing' | 'strength' | 'posted';
+}
+
+interface TodayRoleSnapshot {
+  roleLabel: string;
+  assigned: number;
+  target: number;
+}
+
 const SHIFT_TIME_RANGES: Record<string, string> = {
   morning: '10:00 - 16:00',
   evening: '16:00 - 23:00',
 };
 
 const AVAILABILITY_DEADLINE_LABEL = 'Thursday 18:00';
+const AVAILABILITY_DEADLINE_DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
+const AVAILABILITY_DEADLINE_TIMES = ['12:00', '15:00', '18:00', '21:00'];
 
 @Component({
   selector: 'app-dashboard-page',
@@ -83,6 +107,12 @@ export class DashboardPageComponent implements OnInit {
   protected isFillingMissingSlot = false;
   protected selectedAvailabilityCount = 0;
   protected isLoading = false;
+  protected isWorkloadModalOpen = false;
+  protected selectedDeadlineDay = 'Thursday';
+  protected selectedDeadlineTime = '18:00';
+  protected availabilityDeadlineMessage = '';
+  protected readonly availabilityDeadlineDays = AVAILABILITY_DEADLINE_DAYS;
+  protected readonly availabilityDeadlineTimes = AVAILABILITY_DEADLINE_TIMES;
 
   constructor(
     private readonly authService: AuthService,
@@ -179,7 +209,12 @@ export class DashboardPageComponent implements OnInit {
   }
 
   protected get belowStrengthShiftCount(): number {
-    return this.managerShiftMetrics.filter((shift) => shift.strengthGap >= 1).length;
+    return this.getAllRoleGroups().filter(
+      (roleGroup) =>
+        roleGroup.requiredStrengthScore !== undefined &&
+        roleGroup.assignedStrengthScore !== undefined &&
+        roleGroup.assignedStrengthScore < roleGroup.requiredStrengthScore
+    ).length;
   }
 
   protected get averageAssignedTeamStrength(): number {
@@ -208,6 +243,158 @@ export class DashboardPageComponent implements OnInit {
     }
 
     return employeeIds.size;
+  }
+
+  protected get openPostedSlotCount(): number {
+    return this.getAllRoleGroups().reduce(
+      (total, roleGroup) => total + (roleGroup.postedMissingSlots?.length || 0),
+      0
+    );
+  }
+
+  protected get weeklyStaffingBalance(): WeeklyStaffingDay[] {
+    if (!this.board) {
+      return [];
+    }
+
+    return this.board.days.map((day) => {
+      const roleGroups = day.shifts.flatMap((shift) => shift.roleGroups);
+      const assigned = roleGroups.reduce(
+        (total, roleGroup) => total + roleGroup.assignedCount,
+        0
+      );
+      const target = roleGroups.reduce(
+        (total, roleGroup) => total + roleGroup.requiredCount,
+        0
+      );
+
+      return {
+        date: day.date,
+        dayName: day.dayName,
+        assigned,
+        target,
+        isBelowTarget: assigned < target,
+      };
+    });
+  }
+
+  protected get maxWeeklyStaffingTarget(): number {
+    return Math.max(
+      1,
+      ...this.weeklyStaffingBalance.map((day) => Math.max(day.assigned, day.target))
+    );
+  }
+
+  protected get topWorkloadGaps(): EmployeeWorkloadMetric[] {
+    return this.allWorkloadGaps.slice(0, 5);
+  }
+
+  protected get allWorkloadGaps(): EmployeeWorkloadMetric[] {
+    return this.employeeWorkloadMetrics
+      .filter((employee) => employee.gap > 0)
+      .sort(
+        (left, right) =>
+          right.gap - left.gap ||
+          left.assigned - right.assigned ||
+          left.fullName.localeCompare(right.fullName)
+      );
+  }
+
+  protected get managerAttentionItems(): ManagerAttentionItem[] {
+    if (!this.board) {
+      return [];
+    }
+
+    const items: ManagerAttentionItem[] = [];
+
+    for (const day of this.board.days) {
+      for (const shift of day.shifts) {
+        for (const roleGroup of shift.roleGroups) {
+          const missingCount = roleGroup.uncoveredSlots || 0;
+          const postedCount = roleGroup.postedMissingSlots?.length || 0;
+
+          if (missingCount > 0) {
+            items.push({
+              key: `${shift.shiftId}:${roleGroup.jobRole}:missing`,
+              dayName: day.dayName,
+              shiftType: this.formatShiftType(shift),
+              issue: `Missing ${this.getSingularRoleLabel(roleGroup.label)}`,
+              status: 'missing',
+            });
+          }
+
+          if (
+            roleGroup.requiredStrengthScore !== undefined &&
+            roleGroup.assignedStrengthScore !== undefined &&
+            roleGroup.assignedStrengthScore < roleGroup.requiredStrengthScore
+          ) {
+            items.push({
+              key: `${shift.shiftId}:${roleGroup.jobRole}:strength`,
+              dayName: day.dayName,
+              shiftType: this.formatShiftType(shift),
+              issue: 'Below strength',
+              status: 'strength',
+            });
+          }
+
+          if (postedCount > 0) {
+            items.push({
+              key: `${shift.shiftId}:${roleGroup.jobRole}:posted`,
+              dayName: day.dayName,
+              shiftType: this.formatShiftType(shift),
+              issue: 'Posted open slot',
+              status: 'posted',
+            });
+          }
+        }
+      }
+    }
+
+    return items.slice(0, 5);
+  }
+
+  protected get todayRoleSnapshots(): TodayRoleSnapshot[] {
+    const todayKey = this.getTodayDateKey();
+    const today = this.board?.days.find((day) => day.date === todayKey);
+
+    if (!today) {
+      return [];
+    }
+
+    return today.shifts
+      .flatMap((shift) => shift.roleGroups)
+      .reduce<TodayRoleSnapshot[]>((snapshots, roleGroup) => {
+        const existing = snapshots.find(
+          (snapshot) => snapshot.roleLabel === roleGroup.label
+        );
+
+        if (existing) {
+          existing.assigned += roleGroup.assignedCount;
+          existing.target += roleGroup.requiredCount;
+        } else {
+          snapshots.push({
+            roleLabel: roleGroup.label,
+            assigned: roleGroup.assignedCount,
+            target: roleGroup.requiredCount,
+          });
+        }
+
+        return snapshots;
+      }, []);
+  }
+
+  protected get todayAssignedTotal(): number {
+    return this.todayRoleSnapshots.reduce(
+      (total, snapshot) => total + snapshot.assigned,
+      0
+    );
+  }
+
+  protected get todayTargetTotal(): number {
+    return this.todayRoleSnapshots.reduce(
+      (total, snapshot) => total + snapshot.target,
+      0
+    );
   }
 
   protected get availabilitySubmissionCount(): number {
@@ -395,6 +582,53 @@ export class DashboardPageComponent implements OnInit {
     );
   }
 
+  protected getStaffingBarWidth(assigned: number, target: number): number {
+    if (!target) {
+      return assigned > 0 ? 100 : 0;
+    }
+
+    return Math.min(100, Math.round((assigned / target) * 100));
+  }
+
+  protected getWorkloadGapDisplay(employee: EmployeeWorkloadMetric): string {
+    return employee.gap > 0 ? `-${employee.gap}` : '0';
+  }
+
+  protected getAttentionStatusLabel(status: ManagerAttentionItem['status']): string {
+    if (status === 'missing') {
+      return 'Missing';
+    }
+
+    if (status === 'strength') {
+      return 'Strength';
+    }
+
+    return 'Posted';
+  }
+
+  protected openWorkloadModal(): void {
+    this.isWorkloadModalOpen = true;
+  }
+
+  protected closeWorkloadModal(): void {
+    this.isWorkloadModalOpen = false;
+  }
+
+  protected updateDeadlineDay(event: Event): void {
+    this.selectedDeadlineDay = (event.target as HTMLSelectElement).value;
+    this.availabilityDeadlineMessage = '';
+  }
+
+  protected updateDeadlineTime(event: Event): void {
+    this.selectedDeadlineTime = (event.target as HTMLSelectElement).value;
+    this.availabilityDeadlineMessage = '';
+  }
+
+  protected changeAvailabilityDeadline(): void {
+    this.availabilityDeadlineMessage =
+      'Deadline settings are not connected to backend storage yet. Current deadline remains Thursday 18:00.';
+  }
+
   protected openFillConfirmation(slot: AvailableMissingShiftSlot): void {
     this.pendingFillSlot = slot;
     this.missingShiftMessage = '';
@@ -537,6 +771,22 @@ export class DashboardPageComponent implements OnInit {
 
   private formatRoleLabel(roleLabel: string): string {
     return roleLabel === 'Shift managers' ? 'Shift manager' : roleLabel;
+  }
+
+  private getSingularRoleLabel(roleLabel: string): string {
+    if (roleLabel === 'Waiters') {
+      return 'waiter';
+    }
+
+    if (roleLabel === 'Bartenders') {
+      return 'bartender';
+    }
+
+    if (roleLabel === 'Shift managers') {
+      return 'shift manager';
+    }
+
+    return roleLabel.toLowerCase();
   }
 
   private formatShiftType(shift: ScheduleShift): string {
