@@ -1,34 +1,34 @@
 const { SCHEDULE_JOB_ROLES } = require("../constants/roles");
 
-// Score weights for local search. Lower totalScore is better; coverage is intentionally not scored here.
+// משקלי הניקוד של local search: ציון נמוך יותר טוב יותר, ו-coverage לא חלק מהציון כי הוא נבדק כחוקיות בלבד.
 const SCORE_WEIGHTS = {
   strengthWeight: 10,
   fairnessWeight: 1,
 };
 const DEFAULT_MAX_IMPROVEMENT_ITERATIONS = 20;
 
-// Rounds diagnostic values so improvement summaries stay readable and stable.
+// מקבלת ערך מספרי ומחזירה אותו מעוגל, כדי שהאבחון וה-summary יהיו קריאים ויציבים להצגה.
 function roundScore(value) {
   return Number(Number(value || 0).toFixed(2));
 }
 
-// Converts missing or invalid DB values into safe numeric values for scoring.
+// מקבלת ערך מה-DB/API ומחזירה מספר בטוח לחישובי scoring, גם אם הערך חסר או לא תקין.
 function toNumber(value) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? numericValue : 0;
 }
 
-// Checks active status across DB/API employee shapes before using an employee in candidates.
+// מקבלת עובד ומחזירה האם הוא פעיל, כדי שמועמדי swap/replace לא ישתמשו בעובדים לא פעילים.
 function isEmployeeActive(employee) {
   return Boolean(employee?.is_active ?? employee?.isActive);
 }
 
-// Reads the employee role across DB/API shapes so role validation is consistent.
+// מקבלת עובד ומחזירה את התפקיד שלו, גם אם השדה הגיע בצורת DB או בצורת API.
 function getEmployeeRole(employee) {
   return employee?.role || employee?.jobRole;
 }
 
-// Calculates employee strength used for shift strength scoring and calculated fairness targets.
+// מקבלת עובד ומחשבת ציון חוזק; הציון משמש גם לחוזק משמרת וגם ליעד ההוגנות המחושב.
 function calculateStrengthScore(employee = {}) {
   const seniorityMonths = employee.seniority_months ?? employee.seniorityMonths;
   const pressureHandling = employee.pressure_handling ?? employee.pressureHandling;
@@ -43,32 +43,32 @@ function calculateStrengthScore(employee = {}) {
   );
 }
 
-// Builds the key used for shift-role lookup tables.
+// מקבלת shiftId ותפקיד ומחזירה key אחיד לטבלאות חיפוש של משמרת-תפקיד.
 function shiftRoleKey(shiftId, jobRole) {
   return `${shiftId}:${jobRole}`;
 }
 
-// Builds the key used to detect whether an employee is already assigned to a shift.
+// מקבלת shiftId ועובד ומחזירה key שמייצג שיבוץ עובד במשמרת, כדי למנוע כפילויות.
 function shiftEmployeeKey(shiftId, employeeId) {
   return `${shiftId}:${employeeId}`;
 }
 
-// Builds the key used to check whether an employee requested/available for a shift.
+// מקבלת עובד ומשמרת ומחזירה key לבדיקת זמינות/בקשה של העובד למשמרת.
 function availabilityKey(employeeId, shiftId) {
   return `${employeeId}:${shiftId}`;
 }
 
-// Builds the exact assignment key, also used for forced-assignment protection.
+// מקבלת assignment ומחזירה key מלא של שיבוץ, כולל תפקיד, כדי לזהות שיבוץ כפוי במדויק.
 function getAssignmentKey(assignment) {
   return `${assignment.shiftId}:${assignment.employeeId}:${assignment.jobRole}`;
 }
 
-// Reads the required employee count for the current role group.
+// מקבלת משמרת ותצורת תפקיד ומחזירה כמה עובדים נדרשים לתפקיד הזה במשמרת.
 function getRequiredCount(shift, roleConfig) {
   return toNumber(shift[roleConfig.requirementField]);
 }
 
-// Splits the shift strength target proportionally for the current role group.
+// מקבלת משמרת ותפקיד ומחזירה את יעד החוזק היחסי של אותו role group בתוך המשמרת.
 function getRoleStrengthTarget(shift, roleConfig, requiredCount) {
   if (requiredCount <= 0) {
     return 0;
@@ -80,7 +80,7 @@ function getRoleStrengthTarget(shift, roleConfig, requiredCount) {
   );
 }
 
-// Converts a strength target into target/minimum thresholds used for scoring and safety checks.
+// מקבלת יעד חוזק ומחזירה target/minimum; minimum משמש כחסם חוקיות לפני קבלת מועמד.
 function buildStrengthRange(requiredStrengthScore) {
   const target = toNumber(requiredStrengthScore);
 
@@ -97,7 +97,7 @@ function buildStrengthRange(requiredStrengthScore) {
   };
 }
 
-// Penalizes shifts below strength target; below minimum is treated more seriously.
+// מקבלת חוזק בפועל וטווח חוזק, ומחזירה penalty: מתחת למינימום חמור יותר ממתחת ליעד.
 function calculateStrengthPenalty(actualStrength, strengthRange) {
   if (!strengthRange.hasStrengthTarget) {
     return 0;
@@ -112,15 +112,16 @@ function calculateStrengthPenalty(actualStrength, strengthRange) {
     : 0;
 }
 
-// Generic list map helper. Map: key -> value[].
+// Map: key -> value[]. מוסיף ערך לרשימת ערכים תחת אותו key, כדי לבנות אינדקסים יעילים.
 function addToListMap(map, key, value) {
   const values = map.get(key) || [];
   values.push(value);
   map.set(key, values);
 }
 
-// Counts items by a derived key. Returned Map: getKey(item) -> count.
+// מקבלת רשימה ופונקציית key ומחזירה Map: getKey(item) -> count, למשל ספירת שיבוצים לעובד.
 function buildCountMap(items, getKey) {
+  // Map: derived key -> count.
   const countByKey = new Map();
 
   for (const item of items) {
@@ -131,41 +132,41 @@ function buildCountMap(items, getKey) {
   return countByKey;
 }
 
-// Builds all lookup structures needed by one local-search iteration.
+// מקבלת קלטי schedule ושיבוצים ובונה context של Maps/Sets; זה מאפשר לייצר ולבדוק מועמדים מהר.
 function buildContext(scheduleInputs, assignments, options = {}) {
   const activeEmployees = scheduleInputs.employees || [];
   const allEmployees = scheduleInputs.allEmployees || activeEmployees;
   const shiftRequests = scheduleInputs.shiftRequests || [];
-  // employeeById: employeeId -> employee. Fast lookup for role/activity validation.
+  // Map: employeeId -> employee object. חיפוש מהיר של פרטי עובד לצורך role/activity validation.
   const employeeById = new Map(allEmployees.map((employee) => [employee.id, employee]));
-  // strengthByEmployeeId: employeeId -> calculated strength score.
+  // Map: employeeId -> calculated strength score. משמש לחישוב חוזק משמרת ויעדי fairness.
   const strengthByEmployeeId = new Map(
     allEmployees.map((employee) => [employee.id, calculateStrengthScore(employee)])
   );
-  // assignedCountByEmployeeId: employeeId -> assigned shift count.
+  // Map: employeeId -> assigned shift count. מצב נוכחי של עומס השיבוצים לכל עובד.
   const assignedCountByEmployeeId = buildCountMap(assignments, (assignment) => assignment.employeeId);
-  // requestedCountByEmployeeId: employeeId -> requested/available shift count.
+  // Map: employeeId -> requested/available shift count. כמה משמרות העובד ביקש או זמין אליהן.
   const requestedCountByEmployeeId = buildCountMap(shiftRequests, (request) => request.employee_id);
-  // assignmentsByShiftRole: "shiftId:jobRole" -> assignment[].
+  // Map: "shiftId:jobRole" -> assignment[]. כל השיבוצים של תפקיד מסוים במשמרת מסוימת.
   const assignmentsByShiftRole = new Map();
-  // assignmentsByRole: jobRole -> assignment[].
+  // Map: jobRole -> assignment[]. כל השיבוצים לפי תפקיד, שימושי למציאת donors ל-swap.
   const assignmentsByRole = new Map();
-  // assignmentByKey: "shiftId:employeeId:jobRole" -> assignment.
+  // Map: "shiftId:employeeId:jobRole" -> assignment. בדיקה מדויקת ששיבוץ קיים לפני שינוי.
   const assignmentByKey = new Map();
-  // shiftEmployeeSet: "shiftId:employeeId". Prevents duplicate assignment in the same shift.
+  // Set: "shiftId:employeeId". מונע מצב שבו אותו עובד משובץ פעמיים באותה משמרת.
   const shiftEmployeeSet = new Set();
 
   for (const assignment of assignments) {
-    // Index current assignments for candidate generation and exact assignment validation.
+    // ממלאים את אינדקסי השיבוצים הנוכחיים כדי ש-generation ו-validation יהיו O(1) ברוב הבדיקות.
     addToListMap(assignmentsByShiftRole, shiftRoleKey(assignment.shiftId, assignment.jobRole), assignment);
     addToListMap(assignmentsByRole, assignment.jobRole, assignment);
     assignmentByKey.set(getAssignmentKey(assignment), assignment);
     shiftEmployeeSet.add(shiftEmployeeKey(assignment.shiftId, assignment.employeeId));
   }
 
-  // activeEmployeesByRole: jobRole -> active employee[].
+  // Map: jobRole -> active employee[]. מאגר מועמדים פעילים להחלפה לפי אותו תפקיד.
   const activeEmployeesByRole = new Map();
-  // fairnessByEmployeeId: employeeId -> fairness data.
+  // Map: employeeId -> fairness data. כולל assigned/requested/target ומצב over/under target.
   const fairnessByEmployeeId = new Map();
 
   for (const employee of activeEmployees) {
@@ -176,10 +177,10 @@ function buildContext(scheduleInputs, assignments, options = {}) {
     const strengthScore = strengthByEmployeeId.get(employee.id) || 0;
     const requestedShifts = requestedCountByEmployeeId.get(employee.id) || 0;
     const assignedShifts = assignedCountByEmployeeId.get(employee.id) || 0;
-    // calculatedTargetShifts is derived from availability and strength; it is not a stored employee field.
+    // calculatedTargetShifts מחושב מזמינות/בקשות ומחוזק עובד; זה לא שדה שמור ב-DB.
     const calculatedTargetShifts = requestedShifts * (0.55 + 0.45 * (strengthScore / 10));
 
-    // Store role candidates and fairness state for efficient replace generation.
+    // שומרים גם candidate pool לפי תפקיד וגם fairness state כדי לייצר replace ממוקד.
     addToListMap(activeEmployeesByRole, getEmployeeRole(employee), employee);
     fairnessByEmployeeId.set(employee.id, {
       employeeId: employee.id,
@@ -199,16 +200,16 @@ function buildContext(scheduleInputs, assignments, options = {}) {
     assignmentsByRole,
     assignmentByKey,
     activeEmployeesByRole,
-    // availabilitySet: "employeeId:shiftId". Confirms an employee can work a target shift.
+    // Set: "employeeId:shiftId". בדיקה מהירה שהעובד זמין למשמרת היעד.
     availabilitySet: new Set(shiftRequests.map((request) => availabilityKey(request.employee_id, request.shift_id))),
-    // forcedAssignmentSet: "shiftId:employeeId:jobRole". Assignments protected from local search.
+    // Set: "shiftId:employeeId:jobRole". שיבוצים כפויים שה-local search לא רשאי להזיז.
     forcedAssignmentSet: options.forcedAssignmentSet || new Set(),
     shiftEmployeeSet,
     fairnessByEmployeeId,
   };
 }
 
-// Diagnoses each shift-role group so weak shifts can drive swap candidates.
+// מקבלת את הקלט וה-context, ומחזירה אבחון לכל shift-role כדי לזהות חולשה ולחשב strength penalty.
 function buildShiftRoleDiagnostics(scheduleInputs, context) {
   return (scheduleInputs.shifts || []).flatMap((shift) =>
     SCHEDULE_JOB_ROLES.map((roleConfig) => {
@@ -216,7 +217,7 @@ function buildShiftRoleDiagnostics(scheduleInputs, context) {
       const strengthRange = buildStrengthRange(
         getRoleStrengthTarget(shift, roleConfig, requiredCount)
       );
-      // assignmentsByShiftRole: "shiftId:jobRole" -> assignment[]. Gets workers in this role group.
+      // Map usage: "shiftId:jobRole" -> assignment[]. שולף את העובדים ששובצו לקבוצת התפקיד הזו.
       const assignedWorkers =
         context.assignmentsByShiftRole.get(shiftRoleKey(shift.id, roleConfig.jobRole)) || [];
       const actualStrength = assignedWorkers.reduce(
@@ -243,10 +244,11 @@ function buildShiftRoleDiagnostics(scheduleInputs, context) {
   );
 }
 
-// Sums squared gaps from calculatedTargetShifts so large fairness gaps matter more.
+// מקבלת context ומחזירה fairness penalty לפי ריבוע הפער מהיעד המחושב, כדי להעניש חוסר איזון גדול.
 function calculateFairnessPenalty(context) {
   let fairnessPenalty = 0;
 
+  // Map usage: employeeId -> fairness data. כל עובד תורם penalty לפי מרחק מהיעד שלו.
   for (const fairness of context.fairnessByEmployeeId.values()) {
     const gap = fairness.assignedShifts - fairness.calculatedTargetShifts;
     fairnessPenalty += gap * gap;
@@ -255,7 +257,7 @@ function calculateFairnessPenalty(context) {
   return roundScore(fairnessPenalty);
 }
 
-// Combines strength and fairness into the objective minimized by hill climbing.
+// מקבלת diagnosis ומשקלים ומחזירה totalScore יחיד שה-hill climbing מנסה להקטין.
 function calculateScheduleScore(diagnosis, weights = SCORE_WEIGHTS) {
   return roundScore(
     diagnosis.strengthPenalty * weights.strengthWeight +
@@ -263,7 +265,7 @@ function calculateScheduleScore(diagnosis, weights = SCORE_WEIGHTS) {
   );
 }
 
-// Scores a concrete schedule state and identifies weak shift-role groups.
+// מקבלת מצב שיבוצים קונקרטי ומחזירה אבחון מלא: strength, fairness, weak shifts ו-totalScore.
 function diagnoseSchedule(scheduleInputs, assignments, options = {}) {
   const context = options.employeeById ? options : buildContext(scheduleInputs, assignments, options);
   const shiftRoleDiagnostics = buildShiftRoleDiagnostics(scheduleInputs, context);
@@ -282,19 +284,19 @@ function diagnoseSchedule(scheduleInputs, assignments, options = {}) {
   return diagnosis;
 }
 
-// Finds one diagnostic entry for post-simulation minimum-strength checks.
+// מקבלת diagnosis, shift ותפקיד ומחזירה את אבחון ה-role group הספציפי לבדיקות אחרי סימולציה.
 function findShiftRoleDiagnostic(diagnosis, shiftId, jobRole) {
   return diagnosis.shiftRoleDiagnostics.find(
     (diagnostic) => diagnostic.shiftId === shiftId && diagnostic.jobRole === jobRole
   );
 }
 
-// Uses forcedAssignmentSet: "shiftId:employeeId:jobRole" to block protected assignments.
+// Set usage: "shiftId:employeeId:jobRole". בודק אם assignment מוגן ואסור להזזה.
 function isForcedAssignment(assignment, context) {
   return assignment && context.forcedAssignmentSet.has(getAssignmentKey(assignment));
 }
 
-// Checks whether a simulated candidate leaves a shift-role below minimum strength.
+// מקבלת אבחון אחרי סימולציה ובודקת אם role group נפגע מתחת למינימום החוקי.
 function isBelowMinimum(diagnosis, shiftId, jobRole) {
   const diagnostic = findShiftRoleDiagnostic(diagnosis, shiftId, jobRole);
   return (
@@ -304,15 +306,15 @@ function isBelowMinimum(diagnosis, shiftId, jobRole) {
   );
 }
 
-// Generates swap candidates around weak shift-role groups only.
+// מקבלת schedule נוכחי ומייצרת רק swap candidates סביב משמרות חלשות, כדי לשפר strength בלי חיפוש ענק.
 function generateSwapCandidates(scheduleInputs, assignments, diagnosis, context) {
   const candidates = [];
 
   for (const weakShift of diagnosis.weakShifts) {
-    // assignmentsByShiftRole: "shiftId:jobRole" -> assignment[]. Workers currently in the weak group.
+    // Map usage: "shiftId:jobRole" -> assignment[]. העובדים שנמצאים כרגע בקבוצה החלשה.
     const weakAssignments =
       context.assignmentsByShiftRole.get(shiftRoleKey(weakShift.shiftId, weakShift.jobRole)) || [];
-    // assignmentsByRole: jobRole -> assignment[]. Donors must have the same role.
+    // Map usage: jobRole -> assignment[]. donors מגיעים רק מאותו תפקיד כדי לא לשבור דרישות role.
     const donorAssignments = context.assignmentsByRole.get(weakShift.jobRole) || [];
 
     for (const weakAssignment of weakAssignments) {
@@ -324,7 +326,7 @@ function generateSwapCandidates(scheduleInputs, assignments, diagnosis, context)
         const weakStrength = context.strengthByEmployeeId.get(weakAssignment.employeeId) || 0;
         const donorStrength = context.strengthByEmployeeId.get(donorAssignment.employeeId) || 0;
 
-        // Keep candidate generation focused; detailed legality is checked in validateCandidate.
+        // כאן מסננים רק מועמדים לא רלוונטיים; חוקיות מלאה נבדקת ב-validateCandidate.
         if (
           donorAssignment.shiftId === weakShift.shiftId ||
           donorAssignment.employeeId === weakAssignment.employeeId ||
@@ -349,7 +351,7 @@ function generateSwapCandidates(scheduleInputs, assignments, diagnosis, context)
   return candidates;
 }
 
-// Generates replace candidates from over-target assigned employees to under-target available employees.
+// מקבלת מצב נוכחי ומייצרת replace candidates: עובד over-target יוצא ועובד under-target מאותו תפקיד נכנס.
 function generateReplaceCandidates(scheduleInputs, assignments, diagnosis, context) {
   const candidates = [];
 
@@ -360,11 +362,11 @@ function generateReplaceCandidates(scheduleInputs, assignments, diagnosis, conte
       continue;
     }
 
-    // activeEmployeesByRole: jobRole -> active employee[]. Replacements must keep the same role.
+    // Map usage: jobRole -> active employee[]. מחפשים מחליפים פעילים מאותו תפקיד בלבד.
     for (const addedEmployee of context.activeEmployeesByRole.get(assignment.jobRole) || []) {
       const addedFairness = context.fairnessByEmployeeId.get(addedEmployee.id);
 
-      // availabilitySet: "employeeId:shiftId"; shiftEmployeeSet: "shiftId:employeeId".
+      // Set usage: availabilitySet "employeeId:shiftId"; shiftEmployeeSet "shiftId:employeeId".
       if (
         addedEmployee.id === assignment.employeeId ||
         !addedFairness?.isUnderTarget ||
@@ -387,10 +389,10 @@ function generateReplaceCandidates(scheduleInputs, assignments, diagnosis, conte
   return candidates;
 }
 
-// Simulates the candidate on a copied assignments array without changing the original schedule.
+// מקבלת שיבוצים ומועמד, ומחזירה מערך שיבוצים חדש שמדמה את השינוי בלי לשנות את המקור.
 function applyCandidate(assignments, candidate) {
   return assignments.map((assignment) => {
-    // Swap: donor employee moves into the weak shift.
+    // Swap: העובד החזק יותר מה-donor shift נכנס למשמרת החלשה.
     if (
       candidate.type === "swap" &&
       assignment.shiftId === candidate.weakShiftId &&
@@ -400,7 +402,7 @@ function applyCandidate(assignments, candidate) {
       return { ...assignment, employeeId: candidate.donorShiftEmployeeId };
     }
 
-    // Swap: weak-shift employee moves into the donor shift.
+    // Swap: העובד מהמשמרת החלשה עובר למשמרת של ה-donor.
     if (
       candidate.type === "swap" &&
       assignment.shiftId === candidate.donorShiftId &&
@@ -410,7 +412,7 @@ function applyCandidate(assignments, candidate) {
       return { ...assignment, employeeId: candidate.weakShiftEmployeeId };
     }
 
-    // Replace: only employeeId changes; shift and role remain fixed.
+    // Replace: רק employeeId משתנה; המשמרת והתפקיד נשארים זהים.
     if (
       candidate.type === "replace" &&
       assignment.shiftId === candidate.shiftId &&
@@ -424,12 +426,12 @@ function applyCandidate(assignments, candidate) {
   });
 }
 
-// Validates candidate legality before score comparison.
+// מקבלת מועמד ובודקת חוקיות לפני scoring: role, availability, forced assignments, כפילויות ומינימום strength.
 function validateCandidate(candidate, scheduleInputs, assignments, diagnosis, context) {
   const reasons = [];
 
   if (candidate.type === "swap") {
-    // assignmentByKey: "shiftId:employeeId:jobRole" -> assignment. Confirms both swap sides exist.
+    // Map usage: "shiftId:employeeId:jobRole" -> assignment. מאמת ששני צדדי ה-swap קיימים.
     const weakAssignment = context.assignmentByKey.get(
       getAssignmentKey({ shiftId: candidate.weakShiftId, employeeId: candidate.weakShiftEmployeeId, jobRole: candidate.jobRole })
     );
@@ -439,7 +441,7 @@ function validateCandidate(candidate, scheduleInputs, assignments, diagnosis, co
     const weakEmployee = context.employeeById.get(candidate.weakShiftEmployeeId);
     const donorEmployee = context.employeeById.get(candidate.donorShiftEmployeeId);
 
-    // Swap must preserve role, availability, forced assignments, and no duplicate employee per shift.
+    // Swap חייב לשמור על role, זמינות, שיבוץ כפוי, ולמנוע כפילות עובד באותה משמרת.
     if (!weakAssignment || !donorAssignment) reasons.push("Swap assignment does not exist.");
     if (isForcedAssignment(weakAssignment, context) || isForcedAssignment(donorAssignment, context)) reasons.push("Cannot swap a forced assignment.");
     if (!weakEmployee || !donorEmployee || !isEmployeeActive(weakEmployee) || !isEmployeeActive(donorEmployee)) reasons.push("Swap employee is missing or inactive.");
@@ -453,7 +455,7 @@ function validateCandidate(candidate, scheduleInputs, assignments, diagnosis, co
       context.shiftEmployeeSet.has(shiftEmployeeKey(candidate.donorShiftId, candidate.weakShiftEmployeeId))
     ) reasons.push("Swap would create a duplicate assignment.");
   } else if (candidate.type === "replace") {
-    // assignmentByKey: "shiftId:employeeId:jobRole" -> assignment. Confirms removed assignment exists.
+    // Map usage: "shiftId:employeeId:jobRole" -> assignment. מאמת שהשיבוץ שאותו מסירים באמת קיים.
     const removedAssignment = context.assignmentByKey.get(
       getAssignmentKey({ shiftId: candidate.shiftId, employeeId: candidate.removedEmployeeId, jobRole: candidate.jobRole })
     );
@@ -462,7 +464,7 @@ function validateCandidate(candidate, scheduleInputs, assignments, diagnosis, co
     const removedFairness = context.fairnessByEmployeeId.get(candidate.removedEmployeeId);
     const addedFairness = context.fairnessByEmployeeId.get(candidate.addedEmployeeId);
 
-    // Replace must move load from over-target to under-target while preserving legality.
+    // Replace חייב להעביר עומס מ-over-target ל-under-target בלי לשבור חוקיות בסיסית.
     if (!removedAssignment) reasons.push("Replace assignment does not exist.");
     if (isForcedAssignment(removedAssignment, context)) reasons.push("Cannot replace a forced assignment.");
     if (!removedFairness?.isOverTarget) reasons.push("Removed employee is not over calculated target shifts.");
@@ -479,7 +481,7 @@ function validateCandidate(candidate, scheduleInputs, assignments, diagnosis, co
     return { valid: false, reasons, assignmentsAfter: null, diagnosisAfter: null };
   }
 
-  // Simulate first, then verify the affected shift-role groups stay above minimum strength.
+  // אחרי בדיקות בסיסיות מדמים את השינוי ואז בודקים שהקבוצות שנפגעו לא ירדו מתחת למינימום strength.
   const assignmentsAfter = applyCandidate(assignments, candidate);
   const contextAfter = buildContext(scheduleInputs, assignmentsAfter, {
     forcedAssignmentSet: context.forcedAssignmentSet,
@@ -509,7 +511,7 @@ function validateCandidate(candidate, scheduleInputs, assignments, diagnosis, co
   };
 }
 
-// Evaluates a legal candidate by simulating it and comparing score before/after.
+// מקבלת מועמד, מריצה validation+simulation, ומחזירה האם הוא משפר totalScore ואת פרטי האבחון אחרי.
 function evaluateCandidate(candidate, scheduleInputs, assignments, diagnosis, context) {
   const validation = validateCandidate(candidate, scheduleInputs, assignments, diagnosis, context);
 
@@ -537,7 +539,7 @@ function evaluateCandidate(candidate, scheduleInputs, assignments, diagnosis, co
   };
 }
 
-// Selects the valid candidate with the largest score improvement for this hill-climbing step.
+// מקבלת evaluations ובוחרת את המועמד החוקי עם השיפור הכי גדול; זה ה-best-improvement step של hill climbing.
 function selectBestEvaluation(evaluations) {
   return (
     evaluations
@@ -552,7 +554,7 @@ function selectBestEvaluation(evaluations) {
   );
 }
 
-// Builds an explainable record of the accepted local-search move.
+// מקבלת evaluation שהתקבל ובונה רשומת acceptedChange ברורה להצגה: מי זז, אילו משמרות ומה השתנה בציון.
 function buildAcceptedChange(evaluation, diagnosisBefore) {
   const candidate = evaluation.candidate;
   const diagnosisAfter = evaluation.diagnosisAfter;
@@ -576,7 +578,7 @@ function buildAcceptedChange(evaluation, diagnosisBefore) {
   };
 }
 
-// Builds the summary returned to the schedule generation flow and frontend.
+// מקבלת אבחון התחלתי/סופי ונתוני loop, ומחזירה summary שמסביר לפרונט מה השיפור עשה.
 function buildImprovementSummary(initialDiagnosis, finalDiagnosis, enabled, acceptedChanges, loopSummary) {
   return {
     enabled,
@@ -598,7 +600,7 @@ function buildImprovementSummary(initialDiagnosis, finalDiagnosis, enabled, acce
   };
 }
 
-// Main improvement API: starts from a legal schedule and repeatedly applies the best local improvement.
+// API ראשי: מקבל schedule חוקי, מריץ local-search-swap-replace, ומחזיר שיבוצים משופרים ו-summary.
 function runScheduleImprovement(scheduleInputs, initialAssignments, options = {}) {
   const maxIterations = Number.isInteger(options.maxIterations)
     ? Math.max(0, options.maxIterations)
@@ -614,12 +616,12 @@ function runScheduleImprovement(scheduleInputs, initialAssignments, options = {}
   let stopReason = maxIterations === 0 ? "max_iterations" : "no_improving_candidate";
 
   for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
-    // Generate both candidate types from the current schedule state.
+    // בכל איטרציה מייצרים שני סוגי מועמדים מתוך המצב הנוכחי: swap לחוזק ו-replace להוגנות.
     const candidates = [
       ...generateSwapCandidates(scheduleInputs, currentAssignments, currentDiagnosis, currentContext),
       ...generateReplaceCandidates(scheduleInputs, currentAssignments, currentDiagnosis, currentContext),
     ];
-    // Validate, simulate, and score each candidate before selecting one.
+    // כל מועמד עובר validation, simulation ו-scoring לפני שבוחרים את השיפור הכי טוב.
     const evaluations = candidates.map((candidate) =>
       evaluateCandidate(candidate, scheduleInputs, currentAssignments, currentDiagnosis, currentContext)
     );
@@ -633,7 +635,7 @@ function runScheduleImprovement(scheduleInputs, initialAssignments, options = {}
       break;
     }
 
-    // Apply the best move, rebuild context, and continue from the improved schedule.
+    // מקבלים רק את המהלך הכי טוב, בונים context חדש, וממשיכים מה-schedule המשופר.
     acceptedChanges.push(buildAcceptedChange(bestEvaluation, currentDiagnosis));
     currentAssignments = bestEvaluation.assignmentsAfter;
     currentContext = buildContext(scheduleInputs, currentAssignments, options);
@@ -658,7 +660,7 @@ function runScheduleImprovement(scheduleInputs, initialAssignments, options = {}
   };
 }
 
-// Public exports used by the generator and by focused algorithm checks.
+// הייצוא הציבורי משמש את מחולל הסידור וגם בדיקות ממוקדות של אלגוריתם השיפור.
 module.exports = {
   SCORE_WEIGHTS,
   buildStrengthRange,
