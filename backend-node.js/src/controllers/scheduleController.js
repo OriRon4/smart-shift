@@ -155,6 +155,61 @@ async function finishShift(req, res, next) {
   }
 }
 
+async function postMissingShiftSlot(req, res, next) {
+  try {
+    const result = await scheduleService.postMissingShiftSlot(
+      req.params.scheduleId,
+      req.body || {},
+      req.user
+    );
+
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function unpostMissingShiftSlot(req, res, next) {
+  try {
+    const result = await scheduleService.unpostMissingShiftSlot(
+      req.params.scheduleId,
+      req.body || {},
+      req.user
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getAvailableMissingShiftSlots(req, res, next) {
+  try {
+    const { weekStartDate } = req.query || {};
+    const result = await scheduleService.getAvailableMissingShiftSlots(
+      weekStartDate,
+      req.user
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function fillMissingShiftSlot(req, res, next) {
+  try {
+    const result = await scheduleService.fillMissingShiftSlot(
+      req.params.slotId,
+      req.user
+    );
+
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   getSchedule,
   generateSchedule,
@@ -166,4 +221,8 @@ module.exports = {
   updateShiftRequiredStrength,
   updateShiftRequirements,
   finishShift,
+  postMissingShiftSlot,
+  unpostMissingShiftSlot,
+  getAvailableMissingShiftSlots,
+  fillMissingShiftSlot,
 };

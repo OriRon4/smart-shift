@@ -399,6 +399,8 @@
         [board]="board"
         [canManage]="canReplaceScheduleWorkers()"
         [canEditRequiredStrength]="canManageSchedule()"
+        [canPostMissingSlots]="canManageSchedule()"
+        [postingMissingSlotKey]="postingMissingSlotKey"
         [activeShiftIds]="activeShiftIds"
         [activeRoleGroupKeys]="activeRoleGroupKeys"
         [onlyShowActive]="boardFilter !== 'all'"
@@ -409,6 +411,8 @@
         (applyMlPrediction)="applyMlPrediction($event)"
         (updateRequiredStrength)="updateShiftRequiredStrength($event)"
         (finishShift)="openFinishShiftDialog($event)"
+        (postMissingSlot)="postMissingSlot($event)"
+        (unpostMissingSlot)="unpostMissingSlot($event)"
       />
     } @else {
       <section class="schedule-board__state">

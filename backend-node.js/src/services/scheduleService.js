@@ -117,6 +117,56 @@ function canEditScheduleAssignments(user) {
   );
 }
 
+function getRoleConfig(jobRole) {
+  return SCHEDULE_JOB_ROLES.find((roleConfig) => roleConfig.jobRole === jobRole) || null;
+}
+
+function parseShiftId(shiftId) {
+  const numericShiftId = Number(shiftId);
+
+  if (!Number.isInteger(numericShiftId) || numericShiftId <= 0) {
+    throw createHttpError(400, "shiftId must be a positive integer");
+  }
+
+  return numericShiftId;
+}
+
+function parsePostedSlotId(slotId) {
+  const numericSlotId = Number(slotId);
+
+  if (!Number.isInteger(numericSlotId) || numericSlotId <= 0) {
+    throw createHttpError(400, "slotId must be a positive integer");
+  }
+
+  return numericSlotId;
+}
+
+function getRequiredCountForRole(shift, jobRole) {
+  const roleConfig = getRoleConfig(jobRole);
+  return roleConfig ? Number(shift[roleConfig.requirementField] || 0) : 0;
+}
+
+function getRoleLabel(jobRole) {
+  return getRoleConfig(jobRole)?.label || jobRole;
+}
+
+function buildPostedMissingSlotError(reason) {
+  const messages = {
+    not_found: "Missing shift slot was not found",
+    already_taken: "This shift was already taken by another employee",
+    already_filled: "This missing shift is no longer empty",
+    not_published: "Schedule is not published",
+    role_mismatch: "Employee role does not match the missing shift role",
+    inactive_employee: "Employee is not active",
+    conflicting_shift: "Employee already has a conflicting shift",
+  };
+
+  return createHttpError(
+    reason === "not_found" ? 404 : reason === "already_taken" || reason === "already_filled" ? 409 : 400,
+    messages[reason] || "Missing shift cannot be filled"
+  );
+}
+
 async function getScheduleForWeek(weekStartDate, user) {
   // זרימת צפייה בסידור: מתחילים מנתוני השבוע והמשמרות.
   const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
@@ -178,12 +228,17 @@ async function getScheduleForWeek(weekStartDate, user) {
     scheduleInputs,
     persistedSchedule.assignments
   );
+  const postedMissingSlots =
+    await scheduleRepository.getOpenPostedMissingSlotsByScheduleId(
+      persistedSchedule.scheduleId
+    );
 
   // מחזירים board מלא ל-Angular להצגה במסך.
   return buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
     scheduleId: persistedSchedule.scheduleId,
     publishedAt: persistedSchedule.publishedAt,
     permissionRole: user.permissionRole,
+    postedMissingSlots,
   });
 }
 
@@ -205,7 +260,10 @@ async function generateScheduleForWeek(weekStartDate, user) {
   // שלב 4: שומרים את השיבוצים החדשים ב-DB ומקבלים scheduleId.
   const persistenceResult = await scheduleRepository.saveScheduleAssignments(
     scheduleInputs.weekStartDate,
-    persistedAssignments
+    persistedAssignments,
+    {
+      preservePublished: true,
+    }
   );
 
   return {
@@ -670,13 +728,17 @@ async function saveScheduleAssignments(
     scheduleInputs.weekStartDate,
     persistedAssignments,
     {
-      preservePublished: user.permissionRole === PERMISSION_ROLES.SHIFT_LEADER,
+      preservePublished: true,
     }
   );
   const algorithmResult = buildAlgorithmResultFromAssignments(
     scheduleInputs,
     assignments
   );
+  const postedMissingSlots =
+    await scheduleRepository.getOpenPostedMissingSlotsByScheduleId(
+      persistenceResult.scheduleId
+    );
 
   return {
     message: "Schedule assignments saved successfully",
@@ -684,6 +746,7 @@ async function saveScheduleAssignments(
       scheduleId: persistenceResult.scheduleId,
       publishedAt: persistenceResult.publishedAt,
       permissionRole: user.permissionRole,
+      postedMissingSlots,
     }),
     warnings,
     persistenceResult,
@@ -1141,6 +1204,192 @@ async function finishShift(shiftId, body, user) {
   };
 }
 
+async function postMissingShiftSlot(scheduleId, body, user) {
+  const numericScheduleId = parseScheduleId(scheduleId);
+  const numericShiftId = parseShiftId(body.shiftId);
+  const roleConfig = getRoleConfig(body.jobRole);
+  const slotIndex = Number(body.slotIndex);
+
+  if (!roleConfig) {
+    throw createHttpError(400, "jobRole is invalid");
+  }
+
+  if (!Number.isInteger(slotIndex) || slotIndex <= 0) {
+    throw createHttpError(400, "slotIndex must be a positive integer");
+  }
+
+  const persistedSchedule = await scheduleRepository.getPersistedScheduleById(
+    numericScheduleId
+  );
+
+  if (!persistedSchedule) {
+    throw createHttpError(404, "Schedule not found");
+  }
+
+  if (!persistedSchedule.publishedAt) {
+    throw createHttpError(400, "Only missing slots in a published schedule can be posted");
+  }
+
+  const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
+    persistedSchedule.weekStartDate
+  );
+  const shift = scheduleInputs.shifts.find((item) => item.id === numericShiftId);
+
+  if (!shift) {
+    throw createHttpError(400, "shiftId is not in this schedule week");
+  }
+
+  const requiredCount = getRequiredCountForRole(shift, roleConfig.jobRole);
+  const assignedCount = persistedSchedule.assignments.filter(
+    (assignment) =>
+      assignment.shiftId === numericShiftId &&
+      assignment.jobRole === roleConfig.jobRole
+  ).length;
+  const missingCount = Math.max(0, requiredCount - assignedCount);
+
+  if (slotIndex > missingCount) {
+    throw createHttpError(400, "This missing slot is no longer empty");
+  }
+
+  const postedSlot = await scheduleRepository.postMissingShiftSlot(
+    numericScheduleId,
+    numericShiftId,
+    roleConfig.jobRole,
+    slotIndex
+  );
+  const postedMissingSlots =
+    await scheduleRepository.getOpenPostedMissingSlotsByScheduleId(
+      numericScheduleId
+    );
+  const algorithmResult = buildAlgorithmResultFromAssignments(
+    scheduleInputs,
+    persistedSchedule.assignments
+  );
+
+  return {
+    message: "Missing shift posted successfully",
+    postedSlot,
+    ...buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
+      scheduleId: persistedSchedule.scheduleId,
+      publishedAt: persistedSchedule.publishedAt,
+      permissionRole: user.permissionRole,
+      postedMissingSlots,
+    }),
+  };
+}
+
+async function unpostMissingShiftSlot(scheduleId, body, user) {
+  const numericScheduleId = parseScheduleId(scheduleId);
+  const numericShiftId = parseShiftId(body.shiftId);
+  const roleConfig = getRoleConfig(body.jobRole);
+  const slotIndex = Number(body.slotIndex);
+
+  if (!roleConfig) {
+    throw createHttpError(400, "jobRole is invalid");
+  }
+
+  if (!Number.isInteger(slotIndex) || slotIndex <= 0) {
+    throw createHttpError(400, "slotIndex must be a positive integer");
+  }
+
+  const persistedSchedule = await scheduleRepository.getPersistedScheduleById(
+    numericScheduleId
+  );
+
+  if (!persistedSchedule) {
+    throw createHttpError(404, "Schedule not found");
+  }
+
+  const unpostResult = await scheduleRepository.unpostMissingShiftSlot(
+    numericScheduleId,
+    numericShiftId,
+    roleConfig.jobRole,
+    slotIndex
+  );
+
+  if (!unpostResult.ok) {
+    throw buildPostedMissingSlotError(unpostResult.reason);
+  }
+
+  const scheduleInputs = await scheduleRepository.getScheduleInputsByWeek(
+    persistedSchedule.weekStartDate
+  );
+  const refreshedSchedule = await scheduleRepository.getPersistedScheduleById(
+    numericScheduleId
+  );
+  const postedMissingSlots =
+    await scheduleRepository.getOpenPostedMissingSlotsByScheduleId(
+      numericScheduleId
+    );
+  const algorithmResult = buildAlgorithmResultFromAssignments(
+    scheduleInputs,
+    refreshedSchedule.assignments
+  );
+
+  return {
+    message: "Missing shift unposted successfully",
+    ...buildScheduleBoardResponse(scheduleInputs, algorithmResult, {
+      scheduleId: refreshedSchedule.scheduleId,
+      publishedAt: refreshedSchedule.publishedAt,
+      permissionRole: user.permissionRole,
+      postedMissingSlots,
+    }),
+  };
+}
+
+async function getAvailableMissingShiftSlots(weekStartDate, user) {
+  if (!user.employeeId) {
+    return {
+      weekStartDate,
+      availableSlots: [],
+    };
+  }
+
+  const slots = await scheduleRepository.getAvailablePostedMissingSlotsForEmployee(
+    user.employeeId,
+    weekStartDate
+  );
+
+  return {
+    weekStartDate,
+    availableSlots: slots.map((slot) => ({
+      ...slot,
+      dayName: formatDayName(slot.shiftDate),
+      roleLabel: getRoleLabel(slot.jobRole),
+    })),
+  };
+}
+
+async function fillMissingShiftSlot(slotId, user) {
+  const numericSlotId = parsePostedSlotId(slotId);
+
+  if (!user.employeeId) {
+    throw createHttpError(403, "Employee account is required");
+  }
+
+  const employees = await scheduleRepository.getAllEmployees();
+  const employee = employees.find((item) => item.id === Number(user.employeeId));
+
+  if (!employee) {
+    throw createHttpError(404, "Employee not found");
+  }
+
+  const fillResult = await scheduleRepository.fillPostedMissingShiftSlot(
+    numericSlotId,
+    user.employeeId,
+    roundScore(calculateStrengthScore(employee))
+  );
+
+  if (!fillResult.ok) {
+    throw buildPostedMissingSlotError(fillResult.reason);
+  }
+
+  return {
+    message: "Shift filled successfully",
+    filledSlot: fillResult,
+  };
+}
+
 module.exports = {
   getScheduleForWeek,
   generateScheduleForWeek,
@@ -1152,5 +1401,9 @@ module.exports = {
   updateShiftRequiredStrength,
   updateShiftRequirements,
   finishShift,
+  postMissingShiftSlot,
+  unpostMissingShiftSlot,
+  getAvailableMissingShiftSlots,
+  fillMissingShiftSlot,
   buildPersistedAssignments,
 };

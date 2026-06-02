@@ -17,6 +17,7 @@ MODELS_DIR = ML_DIR / "models"
 METADATA_PATH = MODELS_DIR / "model_metadata.json"
 TRAINING_STATUS_PATH = MODELS_DIR / "training_status.json"
 WAITER_MODEL_PATH = MODELS_DIR / "waiter_demand_model.joblib"
+STRENGTH_MODEL_PATH = MODELS_DIR / "strength_demand_model.joblib"
 
 MODEL_VERSION = "waiter_demand_rf_v2"
 
@@ -37,7 +38,8 @@ MODEL_FEATURE_NAMES = [
     "shift_type_evening",
 ]
 
-TARGET_NAME = "actual_waiters_needed"
+WAITER_TARGET_NAME = "actual_waiters_needed"
+STRENGTH_TARGET_NAME = "actual_strength_score"
 
 SAFE_FALLBACKS = {
     "morning": {
@@ -81,6 +83,7 @@ def read_shift_performance_logs() -> pd.DataFrame:
           scheduled_waiters,
           actual_customers,
           actual_waiters_needed,
+          actual_strength_score,
           manager_rating,
           waiter_gap,
           was_understaffed,
@@ -126,7 +129,7 @@ def add_training_historical_average_features(dataframe: pd.DataFrame) -> pd.Data
     enriched = enriched.sort_values(["shift_date", "shift_order", "id"]).reset_index(drop=True)
 
     grouped = enriched.groupby(["day_of_week", "shift_type"], sort=False)
-    enriched["avg_waiters_needed_same_day_shift"] = grouped[TARGET_NAME].transform(
+    enriched["avg_waiters_needed_same_day_shift"] = grouped[WAITER_TARGET_NAME].transform(
         lambda values: values.expanding().mean().shift(1)
     )
     enriched["avg_customers_same_day_shift"] = grouped["actual_customers"].transform(
@@ -214,12 +217,15 @@ def preprocess_features(dataframe: pd.DataFrame) -> pd.DataFrame:
     return encoded[MODEL_FEATURE_NAMES].astype(float)
 
 
-def postprocess_prediction(waiters: float) -> dict[str, int]:
+def postprocess_prediction(waiters: float, strength: float) -> dict[str, int | float]:
     recommended_waiters = int(round(float(waiters)))
     recommended_waiters = min(10, max(1, recommended_waiters))
+    recommended_strength_score = round(float(strength), 1)
+    recommended_strength_score = min(100.0, max(0.0, recommended_strength_score))
 
     return {
         "recommended_waiters": recommended_waiters,
+        "recommended_strength_score": recommended_strength_score,
     }
 
 

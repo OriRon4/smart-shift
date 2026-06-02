@@ -137,25 +137,106 @@
         <strong>{{ selectedAvailabilityCount }}</strong>
       </article>
       <article>
-        <span>Team members</span>
-        <strong>{{ activeEmployeeCount }}</strong>
+        <span>Next Shift</span>
+        <strong>{{ nextPersonalShift?.shiftType || 'None' }}</strong>
       </article>
     </section>
 
-    <section class="dashboard-panel">
-      <header>
-        <h2>Shift Manager View</h2>
-        <a routerLink="/employees">View employees</a>
-      </header>
-      <div class="shift-list">
-        @for (shift of myShifts; track shift.date + shift.shiftType + shift.roleLabel) {
-          <article>
-            <strong>{{ shift.dayName }} {{ shift.shiftType }}</strong>
-            <span>{{ shift.date }} | {{ shift.roleLabel }}</span>
-          </article>
-        } @empty {
-          <p>No assigned shifts for this week.</p>
+    <section class="manager-dashboard-grid">
+      <article class="dashboard-panel dashboard-panel--compact availability-box">
+        <header>
+          <h2>Availability</h2>
+        </header>
+        <div class="dashboard-snapshot">
+          <span>Can submit availability until:</span>
+          <strong>{{ availabilityDeadlineLabel }}</strong>
+        </div>
+        <a class="dashboard-action-link" routerLink="/availability">Go to Availability</a>
+      </article>
+
+      <article class="dashboard-panel dashboard-panel--compact">
+        <header>
+          <h2>Next shift</h2>
+        </header>
+        @if (nextPersonalShift) {
+          <div class="dashboard-snapshot">
+            <strong>{{ nextPersonalShift.dayName }} {{ nextPersonalShift.shiftType }}</strong>
+            <span>{{ nextPersonalShift.date }} | {{ nextPersonalShift.timeRange }}</span>
+          </div>
+        } @else {
+          <p class="dashboard-empty">No upcoming assigned shift.</p>
         }
+      </article>
+    </section>
+
+    <section class="shift-manager-layout">
+      <article class="dashboard-panel dashboard-panel--upcoming-shifts">
+        <header>
+          <h2>My Upcoming Shifts</h2>
+          <a routerLink="/schedule">View full week</a>
+        </header>
+        <div class="shift-list shift-list--detailed shift-list--compact">
+          @for (shift of myShifts; track shift.date + shift.shiftType + shift.roleLabel) {
+            <article>
+              <div>
+                <strong>{{ shift.dayName }} {{ shift.shiftType }}</strong>
+                <span>{{ shift.date }} | {{ shift.timeRange }} | {{ shift.roleLabel }}</span>
+              </div>
+              @if (shift.status) {
+                <small>{{ shift.status }}</small>
+              }
+            </article>
+          } @empty {
+            <p>No assigned shifts for this week.</p>
+          }
+        </div>
+      </article>
+
+      <div class="dashboard-stack">
+        <article class="dashboard-panel">
+          <header>
+            <h2>{{ fillableShiftTitle }}</h2>
+          </header>
+
+          @if (missingShiftMessage) {
+            <p class="dashboard-message">{{ missingShiftMessage }}</p>
+          }
+
+          <div class="shift-list">
+            @for (slot of availableMissingSlots; track slot.slotId) {
+              <article>
+                <div>
+                  <strong>{{ slot.dayName }} {{ formatShiftTypeLabel(slot.shiftType) }}</strong>
+                  <span>{{ slot.shiftDate }} | {{ getShiftTimeRange(slot.shiftType) }} | {{ slot.roleLabel }}</span>
+                </div>
+                <button type="button" (click)="openFillConfirmation(slot)">Take shift</button>
+              </article>
+            } @empty {
+              <p>{{ noAvailableMissingSlotsText }}</p>
+            }
+          </div>
+        </article>
+
+        <article class="dashboard-panel">
+          <header>
+            <h2>Staff for Today</h2>
+          </header>
+          <div class="staff-list">
+            @for (staff of todayStaffMembers; track staff.employeeId + staff.shiftTime) {
+              <article>
+                <div>
+                  <strong>{{ staff.fullName }}</strong>
+                  <span>{{ staff.roleLabel }} | {{ staff.shiftTime }}</span>
+                </div>
+                @if (staff.phoneNumber) {
+                  <small>{{ staff.phoneNumber }}</small>
+                }
+              </article>
+            } @empty {
+              <p>No staff scheduled for today</p>
+            }
+          </div>
+        </article>
       </div>
     </section>
   } @else {
@@ -174,21 +255,97 @@
       </article>
     </section>
 
-    <section class="dashboard-panel">
-      <header>
-        <h2>My Scheduled Shifts</h2>
-        <a routerLink="/schedule">View full week</a>
-      </header>
-      <div class="shift-list">
-        @for (shift of myShifts; track shift.date + shift.shiftType + shift.roleLabel) {
-          <article>
-            <strong>{{ shift.dayName }} {{ shift.shiftType }}</strong>
-            <span>{{ shift.date }} | {{ shift.roleLabel }}</span>
-          </article>
-        } @empty {
-          <p>You are not assigned to shifts this week.</p>
+    <section class="manager-dashboard-grid">
+      <article class="dashboard-panel dashboard-panel--compact availability-box">
+        <header>
+          <h2>Availability</h2>
+        </header>
+        <div class="dashboard-snapshot">
+          <span>Can submit availability until:</span>
+          <strong>{{ availabilityDeadlineLabel }}</strong>
+        </div>
+        <a class="dashboard-action-link" routerLink="/availability">Go to Availability</a>
+      </article>
+
+      <article class="dashboard-panel dashboard-panel--compact">
+        <header>
+          <h2>Next shift</h2>
+        </header>
+        @if (nextPersonalShift) {
+          <div class="dashboard-snapshot">
+            <strong>{{ nextPersonalShift.dayName }} {{ nextPersonalShift.shiftType }}</strong>
+            <span>{{ nextPersonalShift.date }} | {{ nextPersonalShift.timeRange }}</span>
+          </div>
+        } @else {
+          <p class="dashboard-empty">No upcoming assigned shift.</p>
         }
-      </div>
+      </article>
     </section>
+
+    <section class="employee-dashboard-layout">
+      <article class="dashboard-panel dashboard-panel--upcoming-shifts">
+        <header>
+          <h2>My Scheduled Shifts</h2>
+          <a routerLink="/schedule">View full week</a>
+        </header>
+        <div class="shift-list shift-list--detailed shift-list--compact">
+          @for (shift of myShifts; track shift.date + shift.shiftType + shift.roleLabel) {
+            <article>
+              <div>
+                <strong>{{ shift.dayName }} {{ shift.shiftType }}</strong>
+                <span>{{ shift.date }} | {{ shift.timeRange }} | {{ shift.roleLabel }}</span>
+              </div>
+              @if (shift.status) {
+                <small>{{ shift.status }}</small>
+              }
+            </article>
+          } @empty {
+            <p>You are not assigned to shifts this week.</p>
+          }
+        </div>
+      </article>
+
+      <article class="dashboard-panel dashboard-panel--fillable">
+        <header>
+          <h2>{{ fillableShiftTitle }}</h2>
+        </header>
+
+        @if (missingShiftMessage) {
+          <p class="dashboard-message">{{ missingShiftMessage }}</p>
+        }
+
+        <div class="shift-list">
+          @for (slot of availableMissingSlots; track slot.slotId) {
+            <article>
+              <div>
+                <strong>{{ slot.dayName }} {{ formatShiftTypeLabel(slot.shiftType) }}</strong>
+                <span>{{ slot.shiftDate }} | {{ getShiftTimeRange(slot.shiftType) }} | {{ slot.roleLabel }}</span>
+              </div>
+              <button type="button" (click)="openFillConfirmation(slot)">Take shift</button>
+            </article>
+          } @empty {
+            <p>{{ noAvailableMissingSlotsText }}</p>
+          }
+        </div>
+      </article>
+    </section>
+  }
+
+  @if (pendingFillSlot) {
+    <div class="confirm-backdrop" role="presentation">
+      <section class="confirm-dialog" role="dialog" aria-modal="true">
+        <h2>Take shift</h2>
+        <p>
+          Are you sure you want to take this shift?<br>
+          Once you take it, you will not be able to cancel it yourself.
+        </p>
+        <div class="confirm-dialog__actions">
+          <button type="button" (click)="closeFillConfirmation()" [disabled]="isFillingMissingSlot">Cancel</button>
+          <button type="button" (click)="confirmFillMissingShift()" [disabled]="isFillingMissingSlot">
+            {{ isFillingMissingSlot ? 'Taking...' : 'Yes, take this shift' }}
+          </button>
+        </div>
+      </section>
+    </div>
   }
 </main>

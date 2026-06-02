@@ -101,6 +101,7 @@ function buildAssignedWorkersForRole(
         employeeId: employee.id,
         fullName: employee.full_name,
         jobRole: employee.role,
+        phoneNumber: employee.phone_number || null,
       };
 
       if (includeManagerMetrics) {
@@ -133,6 +134,7 @@ function buildScheduleBoardResponse(
   // ה-formatter מקבל תוצאה לוגית מהאלגוריתם ומחזיר board שמתאים ל-Angular.
   const includeManagerMetrics =
     options.permissionRole === PERMISSION_ROLES.MANAGER;
+  const postedMissingSlots = options.postedMissingSlots || [];
 
   // Map: employee.id -> אובייקט עובד.
   const employeeById = new Map(
@@ -176,6 +178,11 @@ function buildScheduleBoardResponse(
   const requestedShiftCountByEmployee = buildCountMap(
     scheduleInputs.shiftRequests,
     (shiftRequest) => shiftRequest.employee_id
+  );
+
+  const postedMissingSlotsByShiftAndRole = buildItemsByKey(
+    postedMissingSlots,
+    (slot) => `${slot.shiftId}:${slot.jobRole}`
   );
 
   // Map: employeeId -> כמה משמרות העובד שובץ אליהן.
@@ -246,6 +253,17 @@ function buildScheduleBoardResponse(
               roleGroup.meetsStrengthTarget = Boolean(
                 summary.meetsStrengthTarget
               );
+              roleGroup.postedMissingSlots = (
+                postedMissingSlotsByShiftAndRole.get(
+                  `${shift.id}:${roleConfig.jobRole}`
+                ) || []
+              )
+                .filter((slot) => slot.slotIndex <= roleGroup.uncoveredSlots)
+                .map((slot) => ({
+                  slotId: slot.slotId,
+                  slotIndex: slot.slotIndex,
+                  postedAt: slot.postedAt,
+                }));
             }
 
             return roleGroup;

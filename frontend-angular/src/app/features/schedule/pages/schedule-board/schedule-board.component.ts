@@ -2,6 +2,7 @@ import { Component, OnDestroy, OnInit } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 
 import {
+  PostMissingSlotRequest,
   ReplaceAssignmentRequest,
   ScheduleGridComponent
 } from '../../components/schedule-grid/schedule-grid.component';
@@ -74,6 +75,7 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
   protected successMessage = '';
   protected boardFilter: 'all' | 'gaps' | 'strength' = 'all';
   protected focusedShiftId: number | null = null;
+  protected postingMissingSlotKey: string | null = null;
   protected hasUnsavedChanges = false;
   protected showEmployeesUnderTarget = false;
   protected mlPredictionsByShiftId = new Map<number, ShiftMlPrediction>();
@@ -1500,6 +1502,107 @@ export class ScheduleBoardComponent implements OnDestroy, OnInit {
         this.actionErrorMessage = this.resolveErrorMessage(error);
       }
     });
+  }
+
+  protected postMissingSlot(request: PostMissingSlotRequest): void {
+    if (!this.board?.scheduleId || !this.canManageSchedule() || this.postingMissingSlotKey) {
+      return;
+    }
+
+    this.actionErrorMessage = '';
+    this.successMessage = '';
+    this.postingMissingSlotKey = `${request.shiftId}:${request.jobRole}:${request.slotIndex}`;
+
+    if (this.hasUnsavedChanges) {
+      this.scheduleApiService
+        .saveAssignments(
+          this.board.scheduleId,
+          this.selectedWeekStartDate,
+          this.flattenAssignments(this.board),
+          this.canManageSchedule()
+        )
+        .subscribe({
+          next: (board) => {
+            this.board = board;
+            this.hasUnsavedChanges = false;
+            this.submitPostMissingSlot(request);
+          },
+          error: (error: unknown) => {
+            this.actionErrorMessage = this.resolveErrorMessage(error);
+            this.postingMissingSlotKey = null;
+          }
+        });
+      return;
+    }
+
+    this.submitPostMissingSlot(request);
+  }
+
+  private submitPostMissingSlot(request: PostMissingSlotRequest): void {
+    if (!this.board?.scheduleId) {
+      this.postingMissingSlotKey = null;
+      return;
+    }
+
+    this.scheduleApiService
+      .postMissingShiftSlot(
+        this.board.scheduleId,
+        request.shiftId,
+        request.jobRole,
+        request.slotIndex
+      )
+      .subscribe({
+        next: (board) => {
+          if (this.isUsableScheduleBoard(board)) {
+            this.board = board;
+          } else {
+            this.reloadCurrentScheduleAfterAction('Missing shift posted.');
+          }
+
+          this.successMessage = 'Missing shift posted.';
+          this.postingMissingSlotKey = null;
+        },
+        error: (error: unknown) => {
+          this.actionErrorMessage = this.resolveErrorMessage(error);
+          this.postingMissingSlotKey = null;
+          this.reloadCurrentScheduleAfterAction('');
+        }
+      });
+  }
+
+  protected unpostMissingSlot(request: PostMissingSlotRequest): void {
+    if (!this.board?.scheduleId || !this.canManageSchedule() || this.postingMissingSlotKey) {
+      return;
+    }
+
+    this.actionErrorMessage = '';
+    this.successMessage = '';
+    this.postingMissingSlotKey = `${request.shiftId}:${request.jobRole}:${request.slotIndex}`;
+
+    this.scheduleApiService
+      .unpostMissingShiftSlot(
+        this.board.scheduleId,
+        request.shiftId,
+        request.jobRole,
+        request.slotIndex
+      )
+      .subscribe({
+        next: (board) => {
+          if (this.isUsableScheduleBoard(board)) {
+            this.board = board;
+          } else {
+            this.reloadCurrentScheduleAfterAction('Missing shift unposted.');
+          }
+
+          this.successMessage = 'Missing shift unposted.';
+          this.postingMissingSlotKey = null;
+        },
+        error: (error: unknown) => {
+          this.actionErrorMessage = this.resolveErrorMessage(error);
+          this.postingMissingSlotKey = null;
+          this.reloadCurrentScheduleAfterAction('');
+        }
+      });
   }
 
   private isUsableScheduleBoard(

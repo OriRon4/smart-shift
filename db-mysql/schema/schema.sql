@@ -137,6 +137,37 @@ CREATE INDEX idx_schedule_assignments_shift_id
 CREATE INDEX idx_schedule_assignments_employee_id
   ON schedule_assignments (employee_id);
 
+CREATE TABLE posted_missing_shift_slots (
+  id INT NOT NULL AUTO_INCREMENT,
+  schedule_id INT NOT NULL,
+  shift_id INT NOT NULL,
+  job_role VARCHAR(30) NOT NULL,
+  slot_index INT UNSIGNED NOT NULL,
+  posted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  filled_at TIMESTAMP NULL DEFAULT NULL,
+  filled_by_employee_id INT NULL,
+  PRIMARY KEY (id),
+  CONSTRAINT uq_posted_missing_shift_slots_slot
+    UNIQUE (schedule_id, shift_id, job_role, slot_index),
+  CONSTRAINT chk_posted_missing_shift_slots_slot_index
+    CHECK (slot_index > 0),
+  CONSTRAINT fk_posted_missing_shift_slots_schedule_id
+    FOREIGN KEY (schedule_id) REFERENCES weekly_schedules (id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_posted_missing_shift_slots_shift_id
+    FOREIGN KEY (shift_id) REFERENCES shifts (id)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE,
+  CONSTRAINT fk_posted_missing_shift_slots_filled_by_employee_id
+    FOREIGN KEY (filled_by_employee_id) REFERENCES employees (id)
+    ON DELETE SET NULL
+    ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+CREATE INDEX idx_posted_missing_shift_slots_open
+  ON posted_missing_shift_slots (schedule_id, shift_id, job_role, filled_at);
+
 CREATE TABLE shift_performance_logs (
   id INT NOT NULL AUTO_INCREMENT,
   shift_id INT NULL,

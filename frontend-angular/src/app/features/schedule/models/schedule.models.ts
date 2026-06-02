@@ -46,13 +46,51 @@ export interface ScheduleRoleGroup {
   requiredStrengthScore?: number;
   assignedStrengthScore?: number;
   meetsStrengthTarget?: boolean;
+  postedMissingSlots?: PostedMissingSlot[];
   assignedWorkers: ScheduleWorker[];
+}
+
+export interface PostedMissingSlot {
+  slotId: number;
+  slotIndex: number;
+  postedAt: string | null;
+}
+
+export interface AvailableMissingShiftSlot {
+  slotId: number;
+  scheduleId: number;
+  shiftId: number;
+  shiftDate: string;
+  dayName: string;
+  shiftType: ScheduleShiftType;
+  weekStartDate: string;
+  jobRole: JobRole;
+  roleLabel: string;
+  slotIndex: number;
+  postedAt: string | null;
+}
+
+export interface AvailableMissingShiftSlotsResponse {
+  weekStartDate: string;
+  availableSlots: AvailableMissingShiftSlot[];
+}
+
+export interface FillMissingShiftSlotResponse {
+  message: string;
+  filledSlot: {
+    scheduleId: number;
+    weekStartDate: string;
+    shiftId: number;
+    jobRole: JobRole;
+    slotId: number;
+  };
 }
 
 export interface ScheduleWorker {
   employeeId: number;
   fullName: string;
   jobRole: JobRole;
+  phoneNumber?: string | null;
   strengthScore?: number;
   assignedShiftCount?: number;
   requestedShiftCount?: number;

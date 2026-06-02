@@ -414,6 +414,49 @@
   cursor: default;
 }
 
+.worker-row--open-slot {
+  border-style: dashed;
+  border-color: #d1dde8;
+  background: #fbfdff;
+}
+
+.worker-row--open-slot .worker-row__avatar {
+  background: #fff4dc;
+  color: #805715;
+}
+
+.worker-row__status {
+  border-radius: 999px;
+  background: #e6f4ec;
+  color: #28724a;
+  font-size: 0.66rem;
+  font-weight: 900;
+  padding: 4px 7px;
+}
+
+.worker-row__post-action {
+  min-height: 28px;
+  border: 1px solid #d5af63;
+  border-radius: 8px;
+  background: #fffaf0;
+  color: #805715;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 0 8px;
+}
+
+.worker-row__post-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.worker-row__post-action--posted {
+  border-color: #addbc2;
+  background: #f0fbf6;
+  color: #216343;
+}
+
 .worker-row__avatar {
   display: grid;
   width: 28px;

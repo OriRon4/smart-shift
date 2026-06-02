@@ -189,6 +189,38 @@
                           } @empty {
                             <p class="worker-list__empty">No employees assigned.</p>
                           }
+
+                          @for (slotIndex of getOpenSlotIndexes(roleGroup); track slotIndex) {
+                            <div class="worker-row worker-row--open-slot">
+                              <span class="worker-row__avatar">+</span>
+                              <span class="worker-row__body">
+                                <span class="worker-row__name">Open {{ roleGroup.label }} slot</span>
+                                <span class="worker-row__metrics">Missing employee #{{ slotIndex }}</span>
+                              </span>
+
+                              @if (canPostMissingSlots && board.publishedAt) {
+                                @if (isMissingSlotPosted(roleGroup, slotIndex)) {
+                                  <button
+                                    type="button"
+                                    class="worker-row__post-action worker-row__post-action--posted"
+                                    [disabled]="isPostingMissingSlot(shift, roleGroup, slotIndex)"
+                                    (click)="requestUnpostMissingSlot(shift, roleGroup, slotIndex)"
+                                  >
+                                    {{ isPostingMissingSlot(shift, roleGroup, slotIndex) ? 'Updating...' : 'Unpost' }}
+                                  </button>
+                                } @else {
+                                  <button
+                                    type="button"
+                                    class="worker-row__post-action"
+                                    [disabled]="isPostingMissingSlot(shift, roleGroup, slotIndex)"
+                                    (click)="requestPostMissingSlot(shift, roleGroup, slotIndex)"
+                                  >
+                                    {{ isPostingMissingSlot(shift, roleGroup, slotIndex) ? 'Posting...' : 'Post' }}
+                                  </button>
+                                }
+                              }
+                            </div>
+                          }
                         </div>
 
                         @if (canManage && hasOpenSlot(roleGroup)) {

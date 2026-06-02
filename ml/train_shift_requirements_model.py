@@ -14,7 +14,9 @@ from ml_utils import (
     METADATA_PATH,
     MODEL_FEATURE_NAMES,
     MODEL_VERSION,
-    TARGET_NAME,
+    STRENGTH_MODEL_PATH,
+    STRENGTH_TARGET_NAME,
+    WAITER_TARGET_NAME,
     WAITER_MODEL_PATH,
     add_training_historical_average_features,
     ensure_models_dir,
@@ -55,35 +57,61 @@ def train() -> dict:
 
     missing_columns = [
         column
-        for column in [TARGET_NAME, "actual_customers", "day_of_week", "shift_type"]
+        for column in [
+            WAITER_TARGET_NAME,
+            STRENGTH_TARGET_NAME,
+            "actual_customers",
+            "day_of_week",
+            "shift_type",
+        ]
         if column not in dataframe.columns
     ]
 
     if missing_columns:
         raise RuntimeError(f"Missing training columns: {missing_columns}")
 
-    dataframe = dataframe.dropna(subset=[TARGET_NAME, "actual_customers"])
+    dataframe = dataframe.dropna(
+        subset=[WAITER_TARGET_NAME, "actual_customers", STRENGTH_TARGET_NAME]
+    )
     dataframe = add_training_historical_average_features(dataframe)
     features = preprocess_features(dataframe)
-    target = dataframe[TARGET_NAME].astype(float)
+    waiter_target = dataframe[WAITER_TARGET_NAME].astype(float)
+    strength_target = dataframe[STRENGTH_TARGET_NAME].astype(float)
 
     if len(dataframe) >= 20:
-        features_train, features_test, target_train, target_test = train_test_split(
+        (
+            features_train,
+            features_test,
+            waiter_target_train,
+            waiter_target_test,
+            strength_target_train,
+            strength_target_test,
+        ) = train_test_split(
             features,
-            target,
+            waiter_target,
+            strength_target,
             test_size=0.2,
             random_state=42,
         )
     else:
         features_train = features_test = features
-        target_train = target_test = target
+        waiter_target_train = waiter_target_test = waiter_target
+        strength_target_train = strength_target_test = strength_target
 
-    model = build_model()
-    model.fit(features_train, target_train)
-    metrics = calculate_metrics(model, features_test, target_test)
+    waiter_model = build_model()
+    strength_model = build_model()
+    waiter_model.fit(features_train, waiter_target_train)
+    strength_model.fit(features_train, strength_target_train)
+    waiter_metrics = calculate_metrics(
+        waiter_model, features_test, waiter_target_test
+    )
+    strength_metrics = calculate_metrics(
+        strength_model, features_test, strength_target_test
+    )
 
     ensure_models_dir()
-    joblib.dump(model, WAITER_MODEL_PATH)
+    joblib.dump(waiter_model, WAITER_MODEL_PATH)
+    joblib.dump(strength_model, STRENGTH_MODEL_PATH)
 
     synthetic_row_count = int(dataframe["is_synthetic"].astype(bool).sum())
     real_row_count = int(len(dataframe) - synthetic_row_count)
@@ -95,11 +123,18 @@ def train() -> dict:
         "synthetic_row_count": synthetic_row_count,
         "real_row_count": real_row_count,
         "feature_names": MODEL_FEATURE_NAMES,
-        "target_name": TARGET_NAME,
-        "model_file_path": str(WAITER_MODEL_PATH),
+        "target_names": {
+            "waiter_demand_model": WAITER_TARGET_NAME,
+            "strength_demand_model": STRENGTH_TARGET_NAME,
+        },
+        "model_files": {
+            "waiter_demand_model": str(WAITER_MODEL_PATH),
+            "strength_demand_model": str(STRENGTH_MODEL_PATH),
+        },
         "model_format": "joblib",
         "metrics": {
-            "waiter_demand_model": metrics,
+            "waiter_demand_model": waiter_metrics,
+            "strength_demand_model": strength_metrics,
         },
     }
 
@@ -130,9 +165,9 @@ def main() -> None:
                     "synthetic_row_count": metadata["synthetic_row_count"],
                     "real_row_count": metadata["real_row_count"],
                     "features": metadata["feature_names"],
-                    "target": metadata["target_name"],
+                    "targets": metadata["target_names"],
                     "metrics": metadata["metrics"],
-                    "model_file": metadata["model_file_path"],
+                    "model_files": metadata["model_files"],
                 },
                 indent=2,
             )

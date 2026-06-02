@@ -8,6 +8,7 @@ import { AvailabilitySubmission } from '../../../availability/models/availabilit
 import { Employee } from '../../../employees/models/employee.models';
 import { EmployeesApiService } from '../../../employees/services/employees-api.service';
 import {
+  AvailableMissingShiftSlot,
   ScheduleBoardResponse,
   ScheduleDay,
   ScheduleRoleGroup,
@@ -20,7 +21,9 @@ interface PersonalShift {
   date: string;
   dayName: string;
   shiftType: string;
+  timeRange: string;
   roleLabel: string;
+  status: string;
 }
 
 interface ManagerShiftMetric {
@@ -44,6 +47,21 @@ interface EmployeeWorkloadMetric {
   gap: number;
 }
 
+interface TodayStaffMember {
+  employeeId: number;
+  fullName: string;
+  roleLabel: string;
+  shiftTime: string;
+  phoneNumber?: string | null;
+}
+
+const SHIFT_TIME_RANGES: Record<string, string> = {
+  morning: '10:00 - 16:00',
+  evening: '16:00 - 23:00',
+};
+
+const AVAILABILITY_DEADLINE_LABEL = 'Thursday 18:00';
+
 @Component({
   selector: 'app-dashboard-page',
   standalone: true,
@@ -59,6 +77,10 @@ export class DashboardPageComponent implements OnInit {
   protected board: ScheduleBoardResponse | null = null;
   protected employees: Employee[] = [];
   protected availabilitySubmissions: AvailabilitySubmission[] = [];
+  protected availableMissingSlots: AvailableMissingShiftSlot[] = [];
+  protected pendingFillSlot: AvailableMissingShiftSlot | null = null;
+  protected missingShiftMessage = '';
+  protected isFillingMissingSlot = false;
   protected selectedAvailabilityCount = 0;
   protected isLoading = false;
 
@@ -318,7 +340,9 @@ export class DashboardPageComponent implements OnInit {
             date: day.date,
             dayName: day.dayName,
             shiftType: this.formatShiftType(shift),
-            roleLabel: roleGroup.label
+            timeRange: this.getShiftTimeRange(shift.shiftType),
+            roleLabel: this.formatRoleLabel(roleGroup.label),
+            status: this.board?.publishedAt ? 'Published' : '',
           }))
       )
     );
@@ -334,6 +358,74 @@ export class DashboardPageComponent implements OnInit {
 
   protected get nextPersonalShift(): PersonalShift | null {
     return this.myShifts[0] || null;
+  }
+
+  protected get availabilityDeadlineLabel(): string {
+    return AVAILABILITY_DEADLINE_LABEL;
+  }
+
+  protected get fillableShiftTitle(): string {
+    return this.isShiftLeader()
+      ? 'Shift manager shifts to fill'
+      : 'Missing shifts to fill';
+  }
+
+  protected get noAvailableMissingSlotsText(): string {
+    return 'No shifts to fill';
+  }
+
+  protected get todayStaffMembers(): TodayStaffMember[] {
+    const todayKey = this.getTodayDateKey();
+    const today = this.board?.days.find((day) => day.date === todayKey);
+
+    if (!today) {
+      return [];
+    }
+
+    return today.shifts.flatMap((shift) =>
+      shift.roleGroups.flatMap((roleGroup) =>
+        roleGroup.assignedWorkers.map((worker) => ({
+          employeeId: worker.employeeId,
+          fullName: worker.fullName,
+          roleLabel: this.formatRoleLabel(roleGroup.label),
+          shiftTime: this.getShiftTimeRange(shift.shiftType),
+          phoneNumber: worker.phoneNumber,
+        }))
+      )
+    );
+  }
+
+  protected openFillConfirmation(slot: AvailableMissingShiftSlot): void {
+    this.pendingFillSlot = slot;
+    this.missingShiftMessage = '';
+  }
+
+  protected closeFillConfirmation(): void {
+    if (!this.isFillingMissingSlot) {
+      this.pendingFillSlot = null;
+    }
+  }
+
+  protected confirmFillMissingShift(): void {
+    if (!this.pendingFillSlot || this.isFillingMissingSlot) {
+      return;
+    }
+
+    this.isFillingMissingSlot = true;
+    this.scheduleApiService.fillMissingShiftSlot(this.pendingFillSlot.slotId).subscribe({
+      next: () => {
+        this.pendingFillSlot = null;
+        this.isFillingMissingSlot = false;
+        this.loadDashboardWeek(this.selectedWeekStartDate);
+      },
+      error: (error) => {
+        this.missingShiftMessage =
+          error?.error?.message || 'This shift is no longer available.';
+        this.pendingFillSlot = null;
+        this.isFillingMissingSlot = false;
+        this.loadDashboardWeek(this.selectedWeekStartDate);
+      }
+    });
   }
 
   private getAllRoleGroups(): ScheduleRoleGroup[] {
@@ -443,8 +535,29 @@ export class DashboardPageComponent implements OnInit {
     return (employee.jobRole || 'employee').replace('_', ' ');
   }
 
+  private formatRoleLabel(roleLabel: string): string {
+    return roleLabel === 'Shift managers' ? 'Shift manager' : roleLabel;
+  }
+
   private formatShiftType(shift: ScheduleShift): string {
     return shift.shiftType.charAt(0).toUpperCase() + shift.shiftType.slice(1);
+  }
+
+  protected formatShiftTypeLabel(shiftType: string): string {
+    return shiftType.charAt(0).toUpperCase() + shiftType.slice(1);
+  }
+
+  protected getShiftTimeRange(shiftType: string): string {
+    return SHIFT_TIME_RANGES[shiftType] || '';
+  }
+
+  private getTodayDateKey(): string {
+    const date = new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
   }
 
   private loadDashboardWeek(weekStartDate: string): void {
@@ -461,6 +574,19 @@ export class DashboardPageComponent implements OnInit {
         this.isLoading = false;
       }
     });
+
+    if (!this.isManager()) {
+      this.scheduleApiService.getAvailableMissingShiftSlots(weekStartDate).subscribe({
+        next: (response) => {
+          this.availableMissingSlots = response.availableSlots;
+        },
+        error: () => {
+          this.availableMissingSlots = [];
+        }
+      });
+    } else {
+      this.availableMissingSlots = [];
+    }
 
     if (this.isManager()) {
       this.availabilityApiService.getAllAvailability(weekStartDate).subscribe({

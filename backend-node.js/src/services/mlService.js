@@ -99,11 +99,7 @@ async function runPythonPrediction(shifts) {
 function normalizePrediction(rawPrediction) {
   const shiftId = Number(rawPrediction.shift_id);
   const recommendedWaiters = Number(rawPrediction.recommended_waiters);
-  const recommendedStrengthScore =
-    rawPrediction.recommended_strength_score === undefined ||
-    rawPrediction.recommended_strength_score === null
-      ? null
-      : Number(rawPrediction.recommended_strength_score);
+  const recommendedStrengthScore = Number(rawPrediction.recommended_strength_score);
 
   if (!Number.isInteger(shiftId) || shiftId <= 0) {
     throw createHttpError(500, "ML prediction returned an invalid shift id");
@@ -114,10 +110,9 @@ function normalizePrediction(rawPrediction) {
   }
 
   if (
-    recommendedStrengthScore !== null &&
-    (!Number.isFinite(recommendedStrengthScore) ||
+    !Number.isFinite(recommendedStrengthScore) ||
       recommendedStrengthScore < 0 ||
-      recommendedStrengthScore > 100)
+      recommendedStrengthScore > 100
   ) {
     throw createHttpError(500, "ML prediction returned invalid strength score");
   }
@@ -193,10 +188,7 @@ async function applyPrediction(shiftId, user) {
       requiredWaiters: prediction.recommendedWaiters,
       requiredBartenders: Number(shift.required_bartenders),
       requiredShiftLeaders: Number(shift.required_shift_leaders),
-      requiredStrengthScore:
-        prediction.recommendedStrengthScore === null
-          ? Number(shift.required_strength_score)
-          : prediction.recommendedStrengthScore,
+      requiredStrengthScore: prediction.recommendedStrengthScore,
     },
     user
   );

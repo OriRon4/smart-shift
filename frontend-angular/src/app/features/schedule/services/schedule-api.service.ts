@@ -4,7 +4,10 @@ import { Observable } from 'rxjs';
 
 import { environment } from '../../../../environments/environment';
 import {
+  AvailableMissingShiftSlotsResponse,
+  FillMissingShiftSlotResponse,
   FinishShiftFeedback,
+  JobRole,
   SaveScheduleAssignment,
   ScheduleBoardResponse,
   ScheduleValidationResponse,
@@ -116,6 +119,57 @@ export class ScheduleApiService {
     return this.http.post<ScheduleBoardResponse>(
       `${this.apiUrl}/shifts/${shiftId}/finish`,
       feedback
+    );
+  }
+
+  postMissingShiftSlot(
+    scheduleId: number,
+    shiftId: number,
+    jobRole: JobRole,
+    slotIndex: number
+  ): Observable<ScheduleBoardResponse> {
+    return this.http.post<ScheduleBoardResponse>(
+      `${this.apiUrl}/${scheduleId}/missing-slots`,
+      {
+        shiftId,
+        jobRole,
+        slotIndex
+      }
+    );
+  }
+
+  unpostMissingShiftSlot(
+    scheduleId: number,
+    shiftId: number,
+    jobRole: JobRole,
+    slotIndex: number
+  ): Observable<ScheduleBoardResponse> {
+    return this.http.delete<ScheduleBoardResponse>(
+      `${this.apiUrl}/${scheduleId}/missing-slots`,
+      {
+        body: {
+          shiftId,
+          jobRole,
+          slotIndex
+        }
+      }
+    );
+  }
+
+  getAvailableMissingShiftSlots(
+    weekStartDate: string
+  ): Observable<AvailableMissingShiftSlotsResponse> {
+    const params = new HttpParams().set('weekStartDate', weekStartDate);
+    return this.http.get<AvailableMissingShiftSlotsResponse>(
+      `${this.apiUrl}/missing-slots/available`,
+      { params }
+    );
+  }
+
+  fillMissingShiftSlot(slotId: number): Observable<FillMissingShiftSlotResponse> {
+    return this.http.post<FillMissingShiftSlotResponse>(
+      `${this.apiUrl}/missing-slots/${slotId}/fill`,
+      {}
     );
   }
 }

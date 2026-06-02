@@ -9,6 +9,7 @@ import joblib
 
 from ml_utils import (
     METADATA_PATH,
+    STRENGTH_MODEL_PATH,
     WAITER_MODEL_PATH,
     build_prediction_features_from_history,
     load_metadata,
@@ -74,7 +75,9 @@ def load_input(args: argparse.Namespace) -> list[dict[str, Any]]:
 
 def validate_model_exists() -> None:
     missing = [
-        path for path in [WAITER_MODEL_PATH, METADATA_PATH] if not path.exists()
+        path
+        for path in [WAITER_MODEL_PATH, STRENGTH_MODEL_PATH, METADATA_PATH]
+        if not path.exists()
     ]
 
     if missing:
@@ -89,12 +92,16 @@ def main() -> None:
     prediction_dataframe = build_prediction_features_from_history(shifts)
     features = preprocess_features(prediction_dataframe)
     metadata = load_metadata()
-    model = joblib.load(WAITER_MODEL_PATH)
-    waiter_predictions = model.predict(features)
+    waiter_model = joblib.load(WAITER_MODEL_PATH)
+    strength_model = joblib.load(STRENGTH_MODEL_PATH)
+    waiter_predictions = waiter_model.predict(features)
+    strength_predictions = strength_model.predict(features)
     predictions = []
 
     for index, shift in enumerate(shifts):
-        prediction = postprocess_prediction(waiter_predictions[index])
+        prediction = postprocess_prediction(
+            waiter_predictions[index], strength_predictions[index]
+        )
         predictions.append(
             {
                 "shift_id": shift.get("shift_id"),

@@ -32,6 +32,12 @@ export interface ReplaceAssignmentRequest {
   mode: 'replace' | 'add';
 }
 
+export interface PostMissingSlotRequest {
+  shiftId: number;
+  jobRole: JobRole;
+  slotIndex: number;
+}
+
 @Component({
   selector: 'app-schedule-grid',
   standalone: true,
@@ -45,6 +51,8 @@ export class ScheduleGridComponent implements OnChanges {
   @Input() activeRoleGroupKeys = new Set<string>();
   @Input() onlyShowActive = false;
   @Input() canEditRequiredStrength = false;
+  @Input() canPostMissingSlots = false;
+  @Input() postingMissingSlotKey: string | null = null;
   @Input() mlPredictionsByShiftId = new Map<number, ShiftMlPrediction>();
   @Input() currentEmployeeId: number | null = null;
 
@@ -53,6 +61,8 @@ export class ScheduleGridComponent implements OnChanges {
   @Output() updateRequiredStrength = new EventEmitter<ShiftRequirementsUpdate>();
   @Output() applyMlPrediction = new EventEmitter<number>();
   @Output() finishShift = new EventEmitter<ScheduleShift>();
+  @Output() postMissingSlot = new EventEmitter<PostMissingSlotRequest>();
+  @Output() unpostMissingSlot = new EventEmitter<PostMissingSlotRequest>();
 
   protected selectedAssignmentKey: string | null = null;
   protected editingShiftId: number | null = null;
@@ -330,6 +340,67 @@ export class ScheduleGridComponent implements OnChanges {
 
   hasOpenSlot(roleGroup: ScheduleRoleGroup): boolean {
     return roleGroup.assignedCount < roleGroup.requiredCount;
+  }
+
+  getOpenSlotIndexes(roleGroup: ScheduleRoleGroup): number[] {
+    return Array.from(
+      { length: roleGroup.uncoveredSlots || 0 },
+      (_, index) => index + 1
+    );
+  }
+
+  isMissingSlotPosted(roleGroup: ScheduleRoleGroup, slotIndex: number): boolean {
+    return Boolean(
+      roleGroup.postedMissingSlots?.some((slot) => slot.slotIndex === slotIndex)
+    );
+  }
+
+  getMissingSlotKey(shift: ScheduleShift, roleGroup: ScheduleRoleGroup, slotIndex: number): string {
+    return `${shift.shiftId}:${roleGroup.jobRole}:${slotIndex}`;
+  }
+
+  isPostingMissingSlot(shift: ScheduleShift, roleGroup: ScheduleRoleGroup, slotIndex: number): boolean {
+    return this.postingMissingSlotKey === this.getMissingSlotKey(shift, roleGroup, slotIndex);
+  }
+
+  requestPostMissingSlot(
+    shift: ScheduleShift,
+    roleGroup: ScheduleRoleGroup,
+    slotIndex: number
+  ): void {
+    if (
+      !this.canPostMissingSlots ||
+      !this.board?.publishedAt ||
+      this.isMissingSlotPosted(roleGroup, slotIndex)
+    ) {
+      return;
+    }
+
+    this.postMissingSlot.emit({
+      shiftId: shift.shiftId,
+      jobRole: roleGroup.jobRole,
+      slotIndex,
+    });
+  }
+
+  requestUnpostMissingSlot(
+    shift: ScheduleShift,
+    roleGroup: ScheduleRoleGroup,
+    slotIndex: number
+  ): void {
+    if (
+      !this.canPostMissingSlots ||
+      !this.board?.publishedAt ||
+      !this.isMissingSlotPosted(roleGroup, slotIndex)
+    ) {
+      return;
+    }
+
+    this.unpostMissingSlot.emit({
+      shiftId: shift.shiftId,
+      jobRole: roleGroup.jobRole,
+      slotIndex,
+    });
   }
 
   private getRoleRequirement(shift: ScheduleShift, jobRole: JobRole): number {

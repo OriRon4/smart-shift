@@ -58,7 +58,7 @@ async function savePredictions(predictions) {
   const values = predictions.map((prediction) => [
     prediction.shiftId,
     prediction.recommendedWaiters,
-    prediction.recommendedStrengthScore ?? null,
+    prediction.recommendedStrengthScore,
     prediction.modelVersion,
   ]);
 
@@ -148,10 +148,7 @@ async function getPredictionByShiftId(shiftId) {
   return {
     shiftId: row.shift_id,
     recommendedWaiters: Number(row.recommended_waiters),
-    recommendedStrengthScore:
-      row.recommended_strength_score === null
-        ? null
-        : Number(row.recommended_strength_score),
+    recommendedStrengthScore: Number(row.recommended_strength_score),
     modelVersion: row.model_version,
     createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
   };
