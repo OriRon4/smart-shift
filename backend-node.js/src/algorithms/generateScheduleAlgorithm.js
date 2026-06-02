@@ -1,7 +1,7 @@
 const { SCHEDULE_JOB_ROLES } = require("../constants/roles");
 const { runScheduleImprovement } = require("./scheduleImprovement");
 
-const ENABLE_SCHEDULE_IMPROVEMENT = false;
+const ENABLE_SCHEDULE_IMPROVEMENT = true;
 
 function getAssignmentKey(assignment) {
   return `${assignment.shiftId}:${assignment.employeeId}:${assignment.jobRole}`;

@@ -1,79 +1,94 @@
 const { SCHEDULE_JOB_ROLES } = require("../constants/roles");
 
-// קבועים בסיסיים של שלב השיפור.
-// בשלב המצומצם הזה הציון בנוי רק מכיסוי וחוזק, בלי הוגנות.
+// Score weights for local search. Lower totalScore is better; coverage is intentionally not scored here.
 const SCORE_WEIGHTS = {
-  coverageWeight: 1000,
   strengthWeight: 10,
+  fairnessWeight: 1,
 };
-
-// מגבלת איטרציות מונעת מהאלגוריתם לרוץ בלי סוף אם יש הרבה אפשרויות להחלפה.
 const DEFAULT_MAX_IMPROVEMENT_ITERATIONS = 20;
 
-// מעגלים ציונים כדי שהסיכום יהיה קריא ועקבי.
+// Rounds diagnostic values so improvement summaries stay readable and stable.
 function roundScore(value) {
   return Number(Number(value || 0).toFixed(2));
 }
 
-// ממירים ערכים למספר בטוח כדי שערכים חסרים מה-DB לא ישברו חישובים.
+// Converts missing or invalid DB values into safe numeric values for scoring.
 function toNumber(value) {
   const numericValue = Number(value);
-
   return Number.isFinite(numericValue) ? numericValue : 0;
 }
 
-// הוותק תורם לציון החוזק, אבל מוגבל ל-10 כדי שלא ישתלט על שאר המדדים.
-function calculateSeniorityScore(seniorityMonths) {
-  return Math.min(10, (toNumber(seniorityMonths) / 24) * 10);
+// Checks active status across DB/API employee shapes before using an employee in candidates.
+function isEmployeeActive(employee) {
+  return Boolean(employee?.is_active ?? employee?.isActive);
 }
 
-function calculateStrengthScore(employee) {
-  // מחשבים ציון חוזק אחד לעובד לפי מקצועיות, אחריות, לחץ, ותק ופוטנציאל.
-  const seniorityScore = calculateSeniorityScore(employee.seniority_months);
+// Reads the employee role across DB/API shapes so role validation is consistent.
+function getEmployeeRole(employee) {
+  return employee?.role || employee?.jobRole;
+}
+
+// Calculates employee strength used for shift strength scoring and calculated fairness targets.
+function calculateStrengthScore(employee = {}) {
+  const seniorityMonths = employee.seniority_months ?? employee.seniorityMonths;
+  const pressureHandling = employee.pressure_handling ?? employee.pressureHandling;
+  const seniorityScore = Math.min(10, (toNumber(seniorityMonths) / 24) * 10);
 
   return (
     0.35 * toNumber(employee.professionalism) +
     0.3 * toNumber(employee.responsibility) +
-    0.2 * toNumber(employee.pressure_handling) +
+    0.2 * toNumber(pressureHandling) +
     0.1 * seniorityScore +
     0.05 * toNumber(employee.potential)
   );
 }
 
+// Builds the key used for shift-role lookup tables.
+function shiftRoleKey(shiftId, jobRole) {
+  return `${shiftId}:${jobRole}`;
+}
+
+// Builds the key used to detect whether an employee is already assigned to a shift.
+function shiftEmployeeKey(shiftId, employeeId) {
+  return `${shiftId}:${employeeId}`;
+}
+
+// Builds the key used to check whether an employee requested/available for a shift.
+function availabilityKey(employeeId, shiftId) {
+  return `${employeeId}:${shiftId}`;
+}
+
+// Builds the exact assignment key, also used for forced-assignment protection.
+function getAssignmentKey(assignment) {
+  return `${assignment.shiftId}:${assignment.employeeId}:${assignment.jobRole}`;
+}
+
+// Reads the required employee count for the current role group.
 function getRequiredCount(shift, roleConfig) {
-  // שולפים את כמות העובדים הנדרשת לפי התפקיד הנוכחי.
   return toNumber(shift[roleConfig.requirementField]);
 }
 
+// Splits the shift strength target proportionally for the current role group.
 function getRoleStrengthTarget(shift, roleConfig, requiredCount) {
-  // אם לא צריך עובדים בתפקיד הזה, אין טעם לחשב יעד חוזק.
   if (requiredCount <= 0) {
     return 0;
   }
 
-  // מחלקים את יעד החוזק הכללי של המשמרת לפי התפקיד שנבדק.
   return (
     (toNumber(shift.required_strength_score) * requiredCount) /
     Math.max(1, toNumber(shift.required_waiters))
   );
 }
 
+// Converts a strength target into target/minimum thresholds used for scoring and safety checks.
 function buildStrengthRange(requiredStrengthScore) {
   const target = toNumber(requiredStrengthScore);
 
-  // בלי יעד חוזק אין ענישת חוזק, ולכן הטווח מסומן כלא פעיל.
   if (target <= 0) {
-    return {
-      hasStrengthTarget: false,
-      target: 0,
-      margin: 0,
-      minimum: 0,
-    };
+    return { hasStrengthTarget: false, target: 0, margin: 0, minimum: 0 };
   }
 
-  // הטווח נותן מרווח קטן סביב היעד, כדי לא לפסול סידור בגלל פער זעיר.
   const margin = Math.max(2, target * 0.1);
-
   return {
     hasStrengthTarget: true,
     target,
@@ -82,347 +97,251 @@ function buildStrengthRange(requiredStrengthScore) {
   };
 }
 
-function buildStrengthScoreByEmployeeId(employees) {
-  // Map: employeeId -> calculated strength score
-  // מאפשר לשלוף מהר את חוזק העובד בזמן אבחון והחלפות.
-  return new Map(
-    employees.map((employee) => [employee.id, calculateStrengthScore(employee)])
-  );
-}
-
-function buildEmployeeById(employees) {
-  // Map: employeeId -> employee object
-  // מאפשר לבדוק מהר אם עובד קיים, פעיל, ומה התפקיד שלו.
-  return new Map(employees.map((employee) => [employee.id, employee]));
-}
-
-function buildAvailabilitySet(shiftRequests) {
-  // Set: "employeeId:shiftId" -> employee is available for this shift
-  // מאפשר לבדוק זמינות בלי לחפש בכל רשימת הבקשות בכל פעם.
-  return new Set(
-    shiftRequests.map(
-      (shiftRequest) => `${shiftRequest.employee_id}:${shiftRequest.shift_id}`
-    )
-  );
-}
-
-function getAssignmentKey(assignment) {
-  // Set key: "shiftId:employeeId:jobRole" -> specific assignment identity
-  // אותו מפתח משמש גם לזיהוי שיבוצים כפויים שאסור להזיז.
-  return `${assignment.shiftId}:${assignment.employeeId}:${assignment.jobRole}`;
-}
-
-function buildAssignmentSummaryByShiftRole(assignments, strengthScoreByEmployeeId) {
-  // Map: "shiftId:jobRole" -> summary of assigned count and total strength
-  // מסכמים לכל משמרת ותפקיד כמה עובדים שובצו ומה החוזק הכולל שלהם.
-  const summaryByShiftRole = new Map();
-
-  for (const assignment of assignments) {
-    // כל תפקיד בכל משמרת נבדק בנפרד, לכן המפתח כולל גם shiftId וגם jobRole.
-    const key = `${assignment.shiftId}:${assignment.jobRole}`;
-    const summary = summaryByShiftRole.get(key) || {
-      assignedCount: 0,
-      actualStrength: 0,
-    };
-
-    summary.assignedCount += 1;
-    summary.actualStrength +=
-      strengthScoreByEmployeeId.get(assignment.employeeId) || 0;
-
-    // מעדכנים את הסיכום המצטבר כדי שהאבחון יוכל לזהות חוסר כיסוי או חולשה.
-    summaryByShiftRole.set(key, summary);
-  }
-
-  return summaryByShiftRole;
-}
-
+// Penalizes shifts below strength target; below minimum is treated more seriously.
 function calculateStrengthPenalty(actualStrength, strengthRange) {
-  // אם אין יעד חוזק פעיל, אין ענישה על חוזק.
   if (!strengthRange.hasStrengthTarget) {
     return 0;
   }
 
-  // מתחת למינימום הענישה מלאה, כי המשמרת נחשבת חלשה מדי.
   if (actualStrength < strengthRange.minimum) {
     return strengthRange.minimum - actualStrength;
   }
 
-  // בין המינימום ליעד הענישה חלקית, כי המצב סביר אבל לא מושלם.
-  if (actualStrength < strengthRange.target) {
-    return (strengthRange.target - actualStrength) * 0.25;
-  }
-
-  return 0;
+  return actualStrength < strengthRange.target
+    ? (strengthRange.target - actualStrength) * 0.25
+    : 0;
 }
 
-function buildShiftRoleDiagnostics(scheduleInputs, assignments) {
-  // משתמשים בכל העובדים הרלוונטיים כדי לחשב חוזק גם עבור עובדים שכבר שובצו.
-  const employees = scheduleInputs.allEmployees || scheduleInputs.employees || [];
+// Generic list map helper. Map: key -> value[].
+function addToListMap(map, key, value) {
+  const values = map.get(key) || [];
+  values.push(value);
+  map.set(key, values);
+}
 
-  // Map: employeeId -> calculated strength score
-  // המפה משמשת לבניית החוזק המצטבר בכל משמרת ותפקיד.
-  const strengthScoreByEmployeeId = buildStrengthScoreByEmployeeId(employees);
+// Counts items by a derived key. Returned Map: getKey(item) -> count.
+function buildCountMap(items, getKey) {
+  const countByKey = new Map();
 
-  // Map: "shiftId:jobRole" -> summary of assigned count and total strength
-  // זהו בסיס האבחון: כמה עובדים שובצו ומה החוזק הכולל שלהם.
-  const summaryByShiftRole = buildAssignmentSummaryByShiftRole(
-    assignments,
-    strengthScoreByEmployeeId
+  for (const item of items) {
+    const key = getKey(item);
+    countByKey.set(key, (countByKey.get(key) || 0) + 1);
+  }
+
+  return countByKey;
+}
+
+// Builds all lookup structures needed by one local-search iteration.
+function buildContext(scheduleInputs, assignments, options = {}) {
+  const activeEmployees = scheduleInputs.employees || [];
+  const allEmployees = scheduleInputs.allEmployees || activeEmployees;
+  const shiftRequests = scheduleInputs.shiftRequests || [];
+  // employeeById: employeeId -> employee. Fast lookup for role/activity validation.
+  const employeeById = new Map(allEmployees.map((employee) => [employee.id, employee]));
+  // strengthByEmployeeId: employeeId -> calculated strength score.
+  const strengthByEmployeeId = new Map(
+    allEmployees.map((employee) => [employee.id, calculateStrengthScore(employee)])
   );
+  // assignedCountByEmployeeId: employeeId -> assigned shift count.
+  const assignedCountByEmployeeId = buildCountMap(assignments, (assignment) => assignment.employeeId);
+  // requestedCountByEmployeeId: employeeId -> requested/available shift count.
+  const requestedCountByEmployeeId = buildCountMap(shiftRequests, (request) => request.employee_id);
+  // assignmentsByShiftRole: "shiftId:jobRole" -> assignment[].
+  const assignmentsByShiftRole = new Map();
+  // assignmentsByRole: jobRole -> assignment[].
+  const assignmentsByRole = new Map();
+  // assignmentByKey: "shiftId:employeeId:jobRole" -> assignment.
+  const assignmentByKey = new Map();
+  // shiftEmployeeSet: "shiftId:employeeId". Prevents duplicate assignment in the same shift.
+  const shiftEmployeeSet = new Set();
 
-  // עוברים על כל משמרת וכל תפקיד כדי לבדוק אם יש חוסר כיסוי או חולשת צוות.
+  for (const assignment of assignments) {
+    // Index current assignments for candidate generation and exact assignment validation.
+    addToListMap(assignmentsByShiftRole, shiftRoleKey(assignment.shiftId, assignment.jobRole), assignment);
+    addToListMap(assignmentsByRole, assignment.jobRole, assignment);
+    assignmentByKey.set(getAssignmentKey(assignment), assignment);
+    shiftEmployeeSet.add(shiftEmployeeKey(assignment.shiftId, assignment.employeeId));
+  }
+
+  // activeEmployeesByRole: jobRole -> active employee[].
+  const activeEmployeesByRole = new Map();
+  // fairnessByEmployeeId: employeeId -> fairness data.
+  const fairnessByEmployeeId = new Map();
+
+  for (const employee of activeEmployees) {
+    if (!isEmployeeActive(employee)) {
+      continue;
+    }
+
+    const strengthScore = strengthByEmployeeId.get(employee.id) || 0;
+    const requestedShifts = requestedCountByEmployeeId.get(employee.id) || 0;
+    const assignedShifts = assignedCountByEmployeeId.get(employee.id) || 0;
+    // calculatedTargetShifts is derived from availability and strength; it is not a stored employee field.
+    const calculatedTargetShifts = requestedShifts * (0.55 + 0.45 * (strengthScore / 10));
+
+    // Store role candidates and fairness state for efficient replace generation.
+    addToListMap(activeEmployeesByRole, getEmployeeRole(employee), employee);
+    fairnessByEmployeeId.set(employee.id, {
+      employeeId: employee.id,
+      assignedShifts,
+      requestedShifts,
+      calculatedTargetShifts,
+      isOverTarget: assignedShifts > calculatedTargetShifts,
+      isUnderTarget: assignedShifts < calculatedTargetShifts,
+    });
+  }
+
+  return {
+    employeeById,
+    strengthByEmployeeId,
+    assignedCountByEmployeeId,
+    assignmentsByShiftRole,
+    assignmentsByRole,
+    assignmentByKey,
+    activeEmployeesByRole,
+    // availabilitySet: "employeeId:shiftId". Confirms an employee can work a target shift.
+    availabilitySet: new Set(shiftRequests.map((request) => availabilityKey(request.employee_id, request.shift_id))),
+    // forcedAssignmentSet: "shiftId:employeeId:jobRole". Assignments protected from local search.
+    forcedAssignmentSet: options.forcedAssignmentSet || new Set(),
+    shiftEmployeeSet,
+    fairnessByEmployeeId,
+  };
+}
+
+// Diagnoses each shift-role group so weak shifts can drive swap candidates.
+function buildShiftRoleDiagnostics(scheduleInputs, context) {
   return (scheduleInputs.shifts || []).flatMap((shift) =>
     SCHEDULE_JOB_ROLES.map((roleConfig) => {
-      // מחשבים את דרישת הכמות ואת יעד החוזק לקבוצת התפקיד הנוכחית.
       const requiredCount = getRequiredCount(shift, roleConfig);
-      const requiredStrengthScore = getRoleStrengthTarget(
-        shift,
-        roleConfig,
-        requiredCount
+      const strengthRange = buildStrengthRange(
+        getRoleStrengthTarget(shift, roleConfig, requiredCount)
       );
-      const strengthRange = buildStrengthRange(requiredStrengthScore);
-
-      // Map lookup: "shiftId:jobRole" -> summary of assigned count and total strength
-      // אם אין שיבוץ לתפקיד הזה במשמרת, מתחילים מסיכום ריק.
-      const key = `${shift.id}:${roleConfig.jobRole}`;
-      const summary = summaryByShiftRole.get(key) || {
-        assignedCount: 0,
-        actualStrength: 0,
-      };
-
-      // coverageDeficit הוא מספר העובדים החסרים מול הדרישה.
-      const coverageDeficit = Math.max(0, requiredCount - summary.assignedCount);
-
-      // strengthPenalty מודד כמה החוזק בפועל נמוך מהטווח הרצוי.
-      const strengthPenalty = calculateStrengthPenalty(
-        summary.actualStrength,
-        strengthRange
+      // assignmentsByShiftRole: "shiftId:jobRole" -> assignment[]. Gets workers in this role group.
+      const assignedWorkers =
+        context.assignmentsByShiftRole.get(shiftRoleKey(shift.id, roleConfig.jobRole)) || [];
+      const actualStrength = assignedWorkers.reduce(
+        (total, assignment) => total + (context.strengthByEmployeeId.get(assignment.employeeId) || 0),
+        0
       );
+      const strengthPenalty = calculateStrengthPenalty(actualStrength, strengthRange);
 
-      // isWeak מסמן קבוצת תפקיד חלשה שממנה מתחיל חיפוש ה-swap.
-      const isWeak =
-        strengthRange.hasStrengthTarget &&
-        summary.actualStrength < strengthRange.minimum;
-
-      // מחזירים רק שדות שהאלגוריתם צריך כדי למצוא ולבדוק החלפות.
       return {
         shiftId: shift.id,
         jobRole: roleConfig.jobRole,
-        coverageDeficit,
-        actualStrength: roundScore(summary.actualStrength),
+        requiredCount,
+        assignedCount: assignedWorkers.length,
+        actualStrength: roundScore(actualStrength),
         strengthRange: {
           hasStrengthTarget: strengthRange.hasStrengthTarget,
+          target: roundScore(strengthRange.target),
           minimum: roundScore(strengthRange.minimum),
         },
         strengthPenalty: roundScore(strengthPenalty),
-        isWeak,
+        isWeak: strengthRange.hasStrengthTarget && actualStrength < strengthRange.minimum,
       };
     })
   );
 }
 
+// Sums squared gaps from calculatedTargetShifts so large fairness gaps matter more.
+function calculateFairnessPenalty(context) {
+  let fairnessPenalty = 0;
+
+  for (const fairness of context.fairnessByEmployeeId.values()) {
+    const gap = fairness.assignedShifts - fairness.calculatedTargetShifts;
+    fairnessPenalty += gap * gap;
+  }
+
+  return roundScore(fairnessPenalty);
+}
+
+// Combines strength and fairness into the objective minimized by hill climbing.
 function calculateScheduleScore(diagnosis, weights = SCORE_WEIGHTS) {
-  // totalScore הוא מדד הבעיה של הסידור: נמוך יותר אומר סידור טוב יותר.
-  // כיסוי מקבל משקל גבוה כדי שלא נעדיף חוזק על פני מחסור בעובדים.
   return roundScore(
-    diagnosis.coveragePenalty * weights.coverageWeight +
-      diagnosis.strengthPenalty * weights.strengthWeight
+    diagnosis.strengthPenalty * weights.strengthWeight +
+      diagnosis.fairnessPenalty * weights.fairnessWeight
   );
 }
 
-function diagnoseSchedule(scheduleInputs, assignments) {
-  // אבחון לפי משמרת ותפקיד מזהה איפה חסרים עובדים ואיפה הצוות חלש מדי.
-  const shiftRoleDiagnostics = buildShiftRoleDiagnostics(
-    scheduleInputs,
-    assignments
-  );
-
-  // coveragePenalty הוא סך כל החוסרים בכמות עובדים בכל המשמרות והתפקידים.
-  const coveragePenalty = roundScore(
-    shiftRoleDiagnostics.reduce(
-      (total, diagnostic) => total + diagnostic.coverageDeficit,
-      0
-    )
-  );
-
-  // strengthPenalty הוא סך כל בעיות החוזק במשמרות.
+// Scores a concrete schedule state and identifies weak shift-role groups.
+function diagnoseSchedule(scheduleInputs, assignments, options = {}) {
+  const context = options.employeeById ? options : buildContext(scheduleInputs, assignments, options);
+  const shiftRoleDiagnostics = buildShiftRoleDiagnostics(scheduleInputs, context);
   const strengthPenalty = roundScore(
-    shiftRoleDiagnostics.reduce(
-      (total, diagnostic) => total + diagnostic.strengthPenalty,
-      0
-    )
+    shiftRoleDiagnostics.reduce((total, diagnostic) => total + diagnostic.strengthPenalty, 0)
   );
-
-  // האבחון מרכז את המידע שהשיפור צריך: ציונים ורשימת משמרות חלשות.
+  const fairnessPenalty = calculateFairnessPenalty(context);
   const diagnosis = {
     shiftRoleDiagnostics,
-    coveragePenalty,
     strengthPenalty,
+    fairnessPenalty,
     weakShifts: shiftRoleDiagnostics.filter((diagnostic) => diagnostic.isWeak),
   };
 
-  // הציון הכולל מאפשר להשוות בין הסידור הנוכחי לבין סידור אחרי swap.
   diagnosis.totalScore = calculateScheduleScore(diagnosis);
-
   return diagnosis;
 }
 
+// Finds one diagnostic entry for post-simulation minimum-strength checks.
 function findShiftRoleDiagnostic(diagnosis, shiftId, jobRole) {
-  // מאתרים אבחון של משמרת ותפקיד כדי לבדוק השפעת swap על אותה קבוצה.
   return diagnosis.shiftRoleDiagnostics.find(
-    (diagnostic) =>
-      diagnostic.shiftId === shiftId && diagnostic.jobRole === jobRole
+    (diagnostic) => diagnostic.shiftId === shiftId && diagnostic.jobRole === jobRole
   );
 }
 
-function findSwapAssignments(assignments, candidate) {
-  // מאתרים את שני השיבוצים שה-swap אמור להחליף ביניהם.
-  return {
-    weakAssignment: assignments.find(
-      (assignment) =>
-        assignment.shiftId === candidate.weakShiftId &&
-        assignment.employeeId === candidate.weakShiftEmployeeId &&
-        assignment.jobRole === candidate.jobRole
-    ),
-    donorAssignment: assignments.find(
-      (assignment) =>
-        assignment.shiftId === candidate.donorShiftId &&
-        assignment.employeeId === candidate.donorShiftEmployeeId &&
-        assignment.jobRole === candidate.jobRole
-    ),
-  };
+// Uses forcedAssignmentSet: "shiftId:employeeId:jobRole" to block protected assignments.
+function isForcedAssignment(assignment, context) {
+  return assignment && context.forcedAssignmentSet.has(getAssignmentKey(assignment));
 }
 
-function createsDuplicateAfterSwap(assignments, candidate) {
-  // בודקים שהחלפה לא תיצור מצב שבו עובד נמצא פעמיים באותה משמרת.
-  return assignments.some((assignment) => {
-    // מתעלמים משני השיבוצים שהולכים לזוז, כי הם עצמם חלק מה-swap.
-    const isWeakAssignment =
-      assignment.shiftId === candidate.weakShiftId &&
-      assignment.employeeId === candidate.weakShiftEmployeeId &&
-      assignment.jobRole === candidate.jobRole;
-    const isDonorAssignment =
-      assignment.shiftId === candidate.donorShiftId &&
-      assignment.employeeId === candidate.donorShiftEmployeeId &&
-      assignment.jobRole === candidate.jobRole;
-
-    if (isWeakAssignment || isDonorAssignment) {
-      return false;
-    }
-
-    // אם אחד העובדים כבר נמצא במשמרת היעד של השני, ה-swap ייצור כפילות.
-    return (
-      (assignment.shiftId === candidate.weakShiftId &&
-        assignment.employeeId === candidate.donorShiftEmployeeId) ||
-      (assignment.shiftId === candidate.donorShiftId &&
-        assignment.employeeId === candidate.weakShiftEmployeeId)
-    );
-  });
+// Checks whether a simulated candidate leaves a shift-role below minimum strength.
+function isBelowMinimum(diagnosis, shiftId, jobRole) {
+  const diagnostic = findShiftRoleDiagnostic(diagnosis, shiftId, jobRole);
+  return (
+    diagnostic &&
+    diagnostic.strengthRange.hasStrengthTarget &&
+    diagnostic.actualStrength < diagnostic.strengthRange.minimum
+  );
 }
 
-function buildAssignmentStateSignature(assignments) {
-  // Set key: full assignment signature -> schedule state already visited
-  // חתימה של כל הסידור משמשת למניעת חזרה למצב שכבר נבדק.
-  return assignments
-    .map(
-      (assignment) =>
-        `${assignment.shiftId}:${assignment.employeeId}:${assignment.jobRole}`
-    )
-    .sort()
-    .join("|");
-}
-
-function generateSwapCandidates(
-  scheduleInputs,
-  assignments,
-  diagnosis,
-  context = {}
-) {
-  const employees = scheduleInputs.employees || [];
-
-  // Map: employeeId -> employee object
-  // נדרש כדי לבדוק פעילות ותפקיד של שני העובדים בהחלפה.
-  const employeeById = buildEmployeeById(employees);
-
-  // Map: employeeId -> calculated strength score
-  // נדרש כדי לוודא שהעובד מהמשמרת התורמת באמת חזק יותר.
-  const strengthScoreByEmployeeId = buildStrengthScoreByEmployeeId(employees);
-
-  // Set: "employeeId:shiftId" -> employee is available for this shift
-  // שני העובדים חייבים להיות זמינים למשמרות שאליהן הם עוברים.
-  const availabilitySet = buildAvailabilitySet(scheduleInputs.shiftRequests || []);
-
-  // Set: "shiftId:employeeId:jobRole" -> forced assignment key
-  // שיבוצים כפויים לא יוזזו על ידי שלב השיפור.
-  const forcedAssignmentSet = context.forcedAssignmentSet || new Set();
+// Generates swap candidates around weak shift-role groups only.
+function generateSwapCandidates(scheduleInputs, assignments, diagnosis, context) {
   const candidates = [];
 
-  // מתחילים רק ממשמרות חלשות, כי המטרה של האלגוריתם המצומצם היא שיפור חוזק.
   for (const weakShift of diagnosis.weakShifts) {
-    // מחפשים עובדים מהמשמרת החלשה שאפשר להזיז, בלי לגעת בשיבוצים כפויים.
-    const weakAssignments = assignments.filter(
-      (assignment) =>
-        assignment.shiftId === weakShift.shiftId &&
-        assignment.jobRole === weakShift.jobRole &&
-        !forcedAssignmentSet.has(getAssignmentKey(assignment))
-    );
-
-    // מחפשים עובדים מאותו תפקיד במשמרות אחרות שיכולים לתרום חוזק.
-    const donorAssignments = assignments.filter(
-      (assignment) =>
-        assignment.shiftId !== weakShift.shiftId &&
-        assignment.jobRole === weakShift.jobRole &&
-        !forcedAssignmentSet.has(getAssignmentKey(assignment))
-    );
+    // assignmentsByShiftRole: "shiftId:jobRole" -> assignment[]. Workers currently in the weak group.
+    const weakAssignments =
+      context.assignmentsByShiftRole.get(shiftRoleKey(weakShift.shiftId, weakShift.jobRole)) || [];
+    // assignmentsByRole: jobRole -> assignment[]. Donors must have the same role.
+    const donorAssignments = context.assignmentsByRole.get(weakShift.jobRole) || [];
 
     for (const weakAssignment of weakAssignments) {
+      if (isForcedAssignment(weakAssignment, context)) {
+        continue;
+      }
+
       for (const donorAssignment of donorAssignments) {
-        // Map lookup: employeeId -> employee object
-        // שולפים את שני העובדים כדי לבדוק שהם קיימים, פעילים ובאותו תפקיד.
-        const weakEmployee = employeeById.get(weakAssignment.employeeId);
-        const donorEmployee = employeeById.get(donorAssignment.employeeId);
+        const weakStrength = context.strengthByEmployeeId.get(weakAssignment.employeeId) || 0;
+        const donorStrength = context.strengthByEmployeeId.get(donorAssignment.employeeId) || 0;
 
-        // Map lookup: employeeId -> calculated strength score
-        // בודקים שהעובד התורם חזק יותר מהעובד שנמצא במשמרת החלשה.
-        const weakEmployeeStrength =
-          strengthScoreByEmployeeId.get(weakAssignment.employeeId) || 0;
-        const donorEmployeeStrength =
-          strengthScoreByEmployeeId.get(donorAssignment.employeeId) || 0;
-
-        // יוצרים מועמד רק אם שני העובדים פעילים, באותו תפקיד, זמינים, וההחלפה באמת מחזקת.
+        // Keep candidate generation focused; detailed legality is checked in validateCandidate.
         if (
-          !weakEmployee ||
-          !donorEmployee ||
-          !weakEmployee.is_active ||
-          !donorEmployee.is_active ||
-          weakEmployee.role !== weakShift.jobRole ||
-          donorEmployee.role !== weakShift.jobRole ||
-          donorEmployeeStrength <= weakEmployeeStrength ||
-          !availabilitySet.has(
-            `${weakAssignment.employeeId}:${donorAssignment.shiftId}`
-          ) ||
-          !availabilitySet.has(
-            `${donorAssignment.employeeId}:${weakShift.shiftId}`
-          )
+          donorAssignment.shiftId === weakShift.shiftId ||
+          donorAssignment.employeeId === weakAssignment.employeeId ||
+          isForcedAssignment(donorAssignment, context) ||
+          donorStrength <= weakStrength
         ) {
           continue;
         }
 
-        // המועמד מתאר החלפה אפשרית בלבד; האם היא באמת טובה ייבדק בשלב ההערכה.
-        const candidate = {
+        candidates.push({
           type: "swap",
+          jobRole: weakShift.jobRole,
           weakShiftId: weakShift.shiftId,
           donorShiftId: donorAssignment.shiftId,
-          jobRole: weakShift.jobRole,
           weakShiftEmployeeId: weakAssignment.employeeId,
           donorShiftEmployeeId: donorAssignment.employeeId,
-          reason: "Swap stronger same-role employee into weak shift.",
-        };
-
-        // לא מוסיפים מועמד אם הוא ייצור כפילות באחת המשמרות.
-        if (!createsDuplicateAfterSwap(assignments, candidate)) {
-          candidates.push(candidate);
-        }
+        });
       }
     }
   }
@@ -430,463 +349,316 @@ function generateSwapCandidates(
   return candidates;
 }
 
-function applySwapCandidate(assignments, candidate) {
-  // הפונקציה לא מחליטה אם ה-swap טוב; היא רק יוצרת רשימת שיבוצים אחרי ההחלפה.
+// Generates replace candidates from over-target assigned employees to under-target available employees.
+function generateReplaceCandidates(scheduleInputs, assignments, diagnosis, context) {
+  const candidates = [];
+
+  for (const assignment of assignments) {
+    const removedFairness = context.fairnessByEmployeeId.get(assignment.employeeId);
+
+    if (isForcedAssignment(assignment, context) || !removedFairness?.isOverTarget) {
+      continue;
+    }
+
+    // activeEmployeesByRole: jobRole -> active employee[]. Replacements must keep the same role.
+    for (const addedEmployee of context.activeEmployeesByRole.get(assignment.jobRole) || []) {
+      const addedFairness = context.fairnessByEmployeeId.get(addedEmployee.id);
+
+      // availabilitySet: "employeeId:shiftId"; shiftEmployeeSet: "shiftId:employeeId".
+      if (
+        addedEmployee.id === assignment.employeeId ||
+        !addedFairness?.isUnderTarget ||
+        !context.availabilitySet.has(availabilityKey(addedEmployee.id, assignment.shiftId)) ||
+        context.shiftEmployeeSet.has(shiftEmployeeKey(assignment.shiftId, addedEmployee.id))
+      ) {
+        continue;
+      }
+
+      candidates.push({
+        type: "replace",
+        shiftId: assignment.shiftId,
+        jobRole: assignment.jobRole,
+        removedEmployeeId: assignment.employeeId,
+        addedEmployeeId: addedEmployee.id,
+      });
+    }
+  }
+
+  return candidates;
+}
+
+// Simulates the candidate on a copied assignments array without changing the original schedule.
+function applyCandidate(assignments, candidate) {
   return assignments.map((assignment) => {
-    // העובד מהמשמרת החלשה עובר למשמרת התורמת.
+    // Swap: donor employee moves into the weak shift.
     if (
+      candidate.type === "swap" &&
       assignment.shiftId === candidate.weakShiftId &&
       assignment.employeeId === candidate.weakShiftEmployeeId &&
       assignment.jobRole === candidate.jobRole
     ) {
-      return {
-        ...assignment,
-        shiftId: candidate.donorShiftId,
-      };
+      return { ...assignment, employeeId: candidate.donorShiftEmployeeId };
     }
 
-    // העובד החזק מהמשמרת התורמת עובר למשמרת החלשה.
+    // Swap: weak-shift employee moves into the donor shift.
     if (
+      candidate.type === "swap" &&
       assignment.shiftId === candidate.donorShiftId &&
       assignment.employeeId === candidate.donorShiftEmployeeId &&
       assignment.jobRole === candidate.jobRole
     ) {
-      return {
-        ...assignment,
-        shiftId: candidate.weakShiftId,
-      };
+      return { ...assignment, employeeId: candidate.weakShiftEmployeeId };
     }
 
-    // כל שיבוץ אחר נשאר כמו שהוא, כדי שהשינוי יהיה ממוקד רק בשני העובדים.
-    return {
-      ...assignment,
-    };
+    // Replace: only employeeId changes; shift and role remain fixed.
+    if (
+      candidate.type === "replace" &&
+      assignment.shiftId === candidate.shiftId &&
+      assignment.employeeId === candidate.removedEmployeeId &&
+      assignment.jobRole === candidate.jobRole
+    ) {
+      return { ...assignment, employeeId: candidate.addedEmployeeId };
+    }
+
+    return { ...assignment };
   });
 }
 
-function validateSwapCandidate(
-  candidate,
-  scheduleInputs,
-  assignments,
-  diagnosis,
-  context = {}
-) {
+// Validates candidate legality before score comparison.
+function validateCandidate(candidate, scheduleInputs, assignments, diagnosis, context) {
   const reasons = [];
-  const employees = scheduleInputs.employees || [];
 
-  // Map: employeeId -> employee object
-  // משמש לוודא ששני העובדים קיימים, פעילים ומתאימים לתפקיד.
-  const employeeById = buildEmployeeById(employees);
+  if (candidate.type === "swap") {
+    // assignmentByKey: "shiftId:employeeId:jobRole" -> assignment. Confirms both swap sides exist.
+    const weakAssignment = context.assignmentByKey.get(
+      getAssignmentKey({ shiftId: candidate.weakShiftId, employeeId: candidate.weakShiftEmployeeId, jobRole: candidate.jobRole })
+    );
+    const donorAssignment = context.assignmentByKey.get(
+      getAssignmentKey({ shiftId: candidate.donorShiftId, employeeId: candidate.donorShiftEmployeeId, jobRole: candidate.jobRole })
+    );
+    const weakEmployee = context.employeeById.get(candidate.weakShiftEmployeeId);
+    const donorEmployee = context.employeeById.get(candidate.donorShiftEmployeeId);
 
-  // Set: "employeeId:shiftId" -> employee is available for this shift
-  // משמש לבדוק זמינות אחרי ההחלפה.
-  const availabilitySet = buildAvailabilitySet(scheduleInputs.shiftRequests || []);
-
-  // Set: "shiftId:employeeId:jobRole" -> forced assignment key
-  // מגן על שיבוצים כפויים מפני שינוי.
-  const forcedAssignmentSet = context.forcedAssignmentSet || new Set();
-
-  // מאתרים את שני השיבוצים בפועל כדי לוודא שהמועמד מבוסס על מצב אמיתי.
-  const { weakAssignment, donorAssignment } = findSwapAssignments(
-    assignments,
-    candidate
-  );
-
-  // אם אחד השיבוצים לא קיים, אי אפשר לבצע swap חוקי.
-  if (!weakAssignment) {
-    reasons.push("Weak shift assignment does not exist.");
-  }
-
-  if (!donorAssignment) {
-    reasons.push("Donor shift assignment does not exist.");
-  }
-
-  if (weakAssignment && donorAssignment) {
-    // שני השיבוצים חייבים להיות באותו תפקיד כדי לא להחליף בין תפקידים שונים.
-    if (weakAssignment.jobRole !== donorAssignment.jobRole) {
-      reasons.push("Swap assignments are not in the same jobRole.");
-    }
-
-    // Set lookup: "shiftId:employeeId:jobRole" -> forced assignment key
-    // אם אחד השיבוצים כפוי, האלגוריתם לא רשאי להזיז אותו.
+    // Swap must preserve role, availability, forced assignments, and no duplicate employee per shift.
+    if (!weakAssignment || !donorAssignment) reasons.push("Swap assignment does not exist.");
+    if (isForcedAssignment(weakAssignment, context) || isForcedAssignment(donorAssignment, context)) reasons.push("Cannot swap a forced assignment.");
+    if (!weakEmployee || !donorEmployee || !isEmployeeActive(weakEmployee) || !isEmployeeActive(donorEmployee)) reasons.push("Swap employee is missing or inactive.");
+    if (getEmployeeRole(weakEmployee) !== candidate.jobRole || getEmployeeRole(donorEmployee) !== candidate.jobRole) reasons.push("Swap employee role does not match.");
     if (
-      forcedAssignmentSet.has(getAssignmentKey(weakAssignment)) ||
-      forcedAssignmentSet.has(getAssignmentKey(donorAssignment))
-    ) {
-      reasons.push("Cannot swap a forced assignment.");
-    }
-  }
+      !context.availabilitySet.has(availabilityKey(candidate.weakShiftEmployeeId, candidate.donorShiftId)) ||
+      !context.availabilitySet.has(availabilityKey(candidate.donorShiftEmployeeId, candidate.weakShiftId))
+    ) reasons.push("Swap employee is not available for the target shift.");
+    if (
+      context.shiftEmployeeSet.has(shiftEmployeeKey(candidate.weakShiftId, candidate.donorShiftEmployeeId)) ||
+      context.shiftEmployeeSet.has(shiftEmployeeKey(candidate.donorShiftId, candidate.weakShiftEmployeeId))
+    ) reasons.push("Swap would create a duplicate assignment.");
+  } else if (candidate.type === "replace") {
+    // assignmentByKey: "shiftId:employeeId:jobRole" -> assignment. Confirms removed assignment exists.
+    const removedAssignment = context.assignmentByKey.get(
+      getAssignmentKey({ shiftId: candidate.shiftId, employeeId: candidate.removedEmployeeId, jobRole: candidate.jobRole })
+    );
+    const removedEmployee = context.employeeById.get(candidate.removedEmployeeId);
+    const addedEmployee = context.employeeById.get(candidate.addedEmployeeId);
+    const removedFairness = context.fairnessByEmployeeId.get(candidate.removedEmployeeId);
+    const addedFairness = context.fairnessByEmployeeId.get(candidate.addedEmployeeId);
 
-  // Map lookup: employeeId -> employee object
-  // בודקים את פרטי העובדים שמופיעים במועמד.
-  const weakEmployee = employeeById.get(candidate.weakShiftEmployeeId);
-  const donorEmployee = employeeById.get(candidate.donorShiftEmployeeId);
-
-  // עובד חסר או לא פעיל לא יכול להשתתף בסידור.
-  if (!weakEmployee || !donorEmployee) {
-    reasons.push("Swap employee does not exist.");
+    // Replace must move load from over-target to under-target while preserving legality.
+    if (!removedAssignment) reasons.push("Replace assignment does not exist.");
+    if (isForcedAssignment(removedAssignment, context)) reasons.push("Cannot replace a forced assignment.");
+    if (!removedFairness?.isOverTarget) reasons.push("Removed employee is not over calculated target shifts.");
+    if (!addedFairness?.isUnderTarget) reasons.push("Added employee is not under calculated target shifts.");
+    if (!removedEmployee || !addedEmployee || !isEmployeeActive(addedEmployee)) reasons.push("Replace employee is missing or inactive.");
+    if (getEmployeeRole(removedEmployee) !== candidate.jobRole || getEmployeeRole(addedEmployee) !== candidate.jobRole) reasons.push("Replace employee role does not match.");
+    if (!context.availabilitySet.has(availabilityKey(candidate.addedEmployeeId, candidate.shiftId))) reasons.push("Added employee is not available for the shift.");
+    if (context.shiftEmployeeSet.has(shiftEmployeeKey(candidate.shiftId, candidate.addedEmployeeId))) reasons.push("Replace would create a duplicate assignment.");
   } else {
-    if (!weakEmployee.is_active || !donorEmployee.is_active) {
-      reasons.push("Swap employee is not active.");
-    }
-
-    // גם לפי העובד עצמו, שני הצדדים חייבים להתאים לתפקיד של המועמד.
-    if (
-      weakEmployee.role !== candidate.jobRole ||
-      donorEmployee.role !== candidate.jobRole
-    ) {
-      reasons.push("Swap employee does not match candidate jobRole.");
-    }
+    reasons.push("Unknown candidate type.");
   }
 
-  // Set lookup: "employeeId:shiftId" -> employee is available for this shift
-  // כל עובד חייב להיות זמין למשמרת שאליה הוא יעבור אחרי ה-swap.
+  if (reasons.length) {
+    return { valid: false, reasons, assignmentsAfter: null, diagnosisAfter: null };
+  }
+
+  // Simulate first, then verify the affected shift-role groups stay above minimum strength.
+  const assignmentsAfter = applyCandidate(assignments, candidate);
+  const contextAfter = buildContext(scheduleInputs, assignmentsAfter, {
+    forcedAssignmentSet: context.forcedAssignmentSet,
+  });
+  const diagnosisAfter = diagnoseSchedule(scheduleInputs, assignmentsAfter, contextAfter);
+
   if (
-    !availabilitySet.has(
-      `${candidate.weakShiftEmployeeId}:${candidate.donorShiftId}`
-    ) ||
-    !availabilitySet.has(
-      `${candidate.donorShiftEmployeeId}:${candidate.weakShiftId}`
-    )
+    candidate.type === "swap" &&
+    (isBelowMinimum(diagnosisAfter, candidate.weakShiftId, candidate.jobRole) ||
+      isBelowMinimum(diagnosisAfter, candidate.donorShiftId, candidate.jobRole))
   ) {
-    reasons.push("Swap employee is not available for the target shift.");
+    reasons.push("Swap would leave an affected shift below minimum strength.");
   }
 
-  // הגנה מפני מצב שבו אותו עובד יופיע פעמיים באותה משמרת.
-  if (createsDuplicateAfterSwap(assignments, candidate)) {
-    reasons.push("Swap would create a duplicate employee assignment.");
-  }
-
-  // רק אחרי בדיקות החוקיות הבסיסיות מדמים את ההשפעה על הסידור.
-  if (!reasons.length) {
-    const candidateAssignments = applySwapCandidate(assignments, candidate);
-    const candidateDiagnosis = diagnoseSchedule(
-      scheduleInputs,
-      candidateAssignments
-    );
-
-    // בודקים את המשמרת התורמת אחרי ההחלפה, כדי לוודא שלא החלשנו אותה יותר מדי.
-    const donorDiagnosticAfter = findShiftRoleDiagnostic(
-      candidateDiagnosis,
-      candidate.donorShiftId,
-      candidate.jobRole
-    );
-
-    // אסור לשפר חוזק אם זה מגדיל בעיית כיסוי.
-    if (candidateDiagnosis.coveragePenalty > diagnosis.coveragePenalty) {
-      reasons.push("Swap would worsen coverage.");
-    }
-
-    // המשמרת שתרמה עובד חזק לא יכולה לרדת מתחת למינימום החוזק שלה.
-    if (
-      donorDiagnosticAfter &&
-      donorDiagnosticAfter.strengthRange.hasStrengthTarget &&
-      donorDiagnosticAfter.actualStrength <
-        donorDiagnosticAfter.strengthRange.minimum
-    ) {
-      reasons.push("Swap would move the donor shift below the minimum strength range.");
-    }
-
-    // בסוף, ה-swap חייב לשפר את totalScore כדי להתקבל.
-    if (candidateDiagnosis.totalScore >= diagnosis.totalScore) {
-      reasons.push("Swap would not improve total score.");
-    }
+  if (
+    candidate.type === "replace" &&
+    isBelowMinimum(diagnosisAfter, candidate.shiftId, candidate.jobRole)
+  ) {
+    reasons.push("Replace would leave the shift below minimum strength.");
   }
 
   return {
     valid: reasons.length === 0,
     reasons,
+    assignmentsAfter: reasons.length ? null : assignmentsAfter,
+    diagnosisAfter: reasons.length ? null : diagnosisAfter,
   };
 }
 
-function evaluateSwapCandidate(
-  candidate,
-  scheduleInputs,
-  assignments,
-  diagnosis,
-  context = {}
-) {
-  // ההערכה מתחילה בוולידציה, כי מועמד לא חוקי לא אמור לעבור סימולציה מלאה.
-  const validation = validateSwapCandidate(
-    candidate,
-    scheduleInputs,
-    assignments,
-    diagnosis,
-    context
-  );
+// Evaluates a legal candidate by simulating it and comparing score before/after.
+function evaluateCandidate(candidate, scheduleInputs, assignments, diagnosis, context) {
+  const validation = validateCandidate(candidate, scheduleInputs, assignments, diagnosis, context);
 
-  // אם המועמד לא חוקי, מחזירים תוצאה שמסבירה למה ולא מחשבים ציון אחרי.
   if (!validation.valid) {
-    return {
-      candidate,
-      validation,
-      scoreBefore: diagnosis.totalScore,
-      scoreAfter: null,
-      coveragePenaltyBefore: diagnosis.coveragePenalty,
-      coveragePenaltyAfter: null,
-      strengthPenaltyBefore: diagnosis.strengthPenalty,
-      strengthPenaltyAfter: null,
-      diagnosisAfter: null,
-      assignmentsAfter: null,
-    };
+    return { candidate, validation, scoreBefore: diagnosis.totalScore, scoreAfter: null, improvement: 0 };
   }
 
-  // מדמים את הסידור אחרי ה-swap כדי לבדוק איך הוא משפיע בפועל.
-  const assignmentsAfter = applySwapCandidate(assignments, candidate);
+  const diagnosisAfter = validation.diagnosisAfter;
+  const improvesTotalScore = diagnosisAfter.totalScore < diagnosis.totalScore;
+  const improvesFairness = candidate.type !== "replace" || diagnosisAfter.fairnessPenalty < diagnosis.fairnessPenalty;
+  const valid = improvesTotalScore && improvesFairness;
 
-  // מאבחנים את הסידור המדומה כדי לקבל ציון וכמות ענישות אחרי ההחלפה.
-  const diagnosisAfter = diagnoseSchedule(scheduleInputs, assignmentsAfter);
-
-  // מחזירים השוואה בין לפני ואחרי כדי ששלב הבחירה יוכל לבחור את השיפור הכי טוב.
   return {
     candidate,
-    validation,
+    validation: {
+      ...validation,
+      valid,
+      reasons: valid ? [] : ["Candidate does not improve the score."],
+    },
     scoreBefore: diagnosis.totalScore,
     scoreAfter: diagnosisAfter.totalScore,
-    coveragePenaltyBefore: diagnosis.coveragePenalty,
-    coveragePenaltyAfter: diagnosisAfter.coveragePenalty,
-    strengthPenaltyBefore: diagnosis.strengthPenalty,
-    strengthPenaltyAfter: diagnosisAfter.strengthPenalty,
+    improvement: roundScore(diagnosis.totalScore - diagnosisAfter.totalScore),
+    assignmentsAfter: validation.assignmentsAfter,
     diagnosisAfter,
-    assignmentsAfter,
   };
 }
 
-function selectBestSwapEvaluation(
-  evaluations,
-  currentDiagnosis,
-  visitedAssignmentStates
-) {
-  let repeatedStateCandidatesCount = 0;
-
-  // בוחרים רק מועמדים חוקיים שמורידים את הציון הכללי של הסידור.
-  const bestEvaluation =
+// Selects the valid candidate with the largest score improvement for this hill-climbing step.
+function selectBestEvaluation(evaluations) {
+  return (
     evaluations
-      .filter((evaluation) => {
-        if (
-          !evaluation.validation.valid ||
-          evaluation.scoreAfter === null ||
-          evaluation.scoreAfter >= currentDiagnosis.totalScore
-        ) {
-          return false;
+      .filter((evaluation) => evaluation.validation.valid && evaluation.improvement > 0)
+      .sort((left, right) => {
+        if (right.improvement !== left.improvement) {
+          return right.improvement - left.improvement;
         }
 
-        // Set lookup: full assignment signature -> schedule state already visited
-        // דוחים מועמד שמחזיר אותנו לסידור שכבר ראינו, כדי למנוע לולאות.
-        const candidateSignature = buildAssignmentStateSignature(
-          evaluation.assignmentsAfter
-        );
+        return left.candidate.type.localeCompare(right.candidate.type);
+      })[0] || null
+  );
+}
 
-        if (visitedAssignmentStates.has(candidateSignature)) {
-          repeatedStateCandidatesCount += 1;
-          return false;
-        }
-
-        return true;
-      })
-
-      // hill climbing: בכל איטרציה בוחרים את ה-swap עם שיפור הציון הגדול ביותר.
-      .sort((leftEvaluation, rightEvaluation) => {
-        const leftImprovement =
-          currentDiagnosis.totalScore - leftEvaluation.scoreAfter;
-        const rightImprovement =
-          currentDiagnosis.totalScore - rightEvaluation.scoreAfter;
-
-        if (rightImprovement !== leftImprovement) {
-          return rightImprovement - leftImprovement;
-        }
-
-        // אם יש תיקו בשיפור, משתמשים בסדר קבוע לפי מזהי המשמרות כדי שהתוצאה תהיה יציבה.
-        if (leftEvaluation.candidate.weakShiftId !== rightEvaluation.candidate.weakShiftId) {
-          return (
-            leftEvaluation.candidate.weakShiftId -
-            rightEvaluation.candidate.weakShiftId
-          );
-        }
-
-        return (
-          leftEvaluation.candidate.donorShiftId -
-          rightEvaluation.candidate.donorShiftId
-        );
-      })[0] || null;
+// Builds an explainable record of the accepted local-search move.
+function buildAcceptedChange(evaluation, diagnosisBefore) {
+  const candidate = evaluation.candidate;
+  const diagnosisAfter = evaluation.diagnosisAfter;
+  const affectedShiftIds =
+    candidate.type === "swap" ? [candidate.weakShiftId, candidate.donorShiftId] : [candidate.shiftId];
+  const affectedEmployeeIds =
+    candidate.type === "swap"
+      ? [candidate.weakShiftEmployeeId, candidate.donorShiftEmployeeId]
+      : [candidate.removedEmployeeId, candidate.addedEmployeeId];
 
   return {
-    bestEvaluation,
-    repeatedStateCandidatesCount,
+    ...candidate,
+    affectedShiftIds,
+    affectedEmployeeIds,
+    scoreBefore: diagnosisBefore.totalScore,
+    scoreAfter: diagnosisAfter.totalScore,
+    strengthPenaltyBefore: diagnosisBefore.strengthPenalty,
+    strengthPenaltyAfter: diagnosisAfter.strengthPenalty,
+    fairnessPenaltyBefore: diagnosisBefore.fairnessPenalty,
+    fairnessPenaltyAfter: diagnosisAfter.fairnessPenalty,
   };
 }
 
-function buildAcceptedChange(evaluation, currentDiagnosis, candidateDiagnosis) {
-  // זהו מידע לדיווח: איזה swap התקבל ומה השתנה בציונים.
-  return {
-    ...evaluation.candidate,
-    scoreBefore: currentDiagnosis.totalScore,
-    scoreAfter: candidateDiagnosis.totalScore,
-    coveragePenaltyBefore: currentDiagnosis.coveragePenalty,
-    coveragePenaltyAfter: candidateDiagnosis.coveragePenalty,
-    strengthPenaltyBefore: currentDiagnosis.strengthPenalty,
-    strengthPenaltyAfter: candidateDiagnosis.strengthPenalty,
-  };
-}
-
-function buildImprovementSummary(
-  initialDiagnosis,
-  finalDiagnosis,
-  enabled = true,
-  acceptedChanges = [],
-  loopSummary = {}
-) {
-  // הסיכום נשאר מינימלי: הוא מציג את מצב הסידור לפני ואחרי ואת כמות המועמדים שנבדקו.
+// Builds the summary returned to the schedule generation flow and frontend.
+function buildImprovementSummary(initialDiagnosis, finalDiagnosis, enabled, acceptedChanges, loopSummary) {
   return {
     enabled,
-    phase: "swap-only-hill-climbing",
-    maxIterations:
-      loopSummary.maxIterations || DEFAULT_MAX_IMPROVEMENT_ITERATIONS,
-    iterationsRun: acceptedChanges.length,
-    stopReason: loopSummary.stopReason || "not_started",
+    phase: "local-search-swap-replace",
+    maxIterations: loopSummary.maxIterations,
+    iterationsRun: loopSummary.iterationsRun,
+    stopReason: loopSummary.stopReason,
     acceptedChangesCount: acceptedChanges.length,
     acceptedChanges,
     initialScore: initialDiagnosis.totalScore,
     finalScore: finalDiagnosis.totalScore,
-    scoreImprovement: roundScore(
-      initialDiagnosis.totalScore - finalDiagnosis.totalScore
-    ),
-    initialCoveragePenalty: initialDiagnosis.coveragePenalty,
-    finalCoveragePenalty: finalDiagnosis.coveragePenalty,
+    scoreImprovement: roundScore(initialDiagnosis.totalScore - finalDiagnosis.totalScore),
     initialStrengthPenalty: initialDiagnosis.strengthPenalty,
     finalStrengthPenalty: finalDiagnosis.strengthPenalty,
-    candidatesChecked: loopSummary.candidatesChecked || 0,
-    validCandidatesCount: loopSummary.validCandidatesCount || 0,
-    rejectedRepeatedStateCandidatesCount:
-      loopSummary.rejectedRepeatedStateCandidatesCount || 0,
+    initialFairnessPenalty: initialDiagnosis.fairnessPenalty,
+    finalFairnessPenalty: finalDiagnosis.fairnessPenalty,
+    candidatesChecked: loopSummary.candidatesChecked,
+    validCandidatesCount: loopSummary.validCandidatesCount,
   };
 }
 
+// Main improvement API: starts from a legal schedule and repeatedly applies the best local improvement.
 function runScheduleImprovement(scheduleInputs, initialAssignments, options = {}) {
-  // מתחילים באבחון הסידור הראשוני כדי לדעת מה צריך לשפר.
-  const initialDiagnosis = diagnoseSchedule(scheduleInputs, initialAssignments);
-
-  // Set: "shiftId:employeeId:jobRole" -> forced assignment key
-  // שיבוצים כפויים עוברים דרך context כדי שכל שלבי השיפור יכבדו אותם.
-  const context = {
-    forcedAssignmentSet: options.forcedAssignmentSet || new Set(),
-  };
-
-  // קובעים את מספר האיטרציות המקסימלי, עם ברירת מחדל אם לא נשלחה אפשרות חיצונית.
   const maxIterations = Number.isInteger(options.maxIterations)
     ? Math.max(0, options.maxIterations)
     : DEFAULT_MAX_IMPROVEMENT_ITERATIONS;
-
-  // acceptedChanges שומר רק swaps שבאמת התקבלו והשפיעו על הסידור.
   const acceptedChanges = [];
-
-  // Set: full assignment signature -> schedule state already visited
-  // מתחילים מהמצב הראשוני כדי לא לחזור אליו בהמשך.
-  const visitedAssignmentStates = new Set([
-    buildAssignmentStateSignature(initialAssignments),
-  ]);
-
-  // currentAssignments ו-currentDiagnosis הם המצב הנוכחי שהלולאה משפרת בכל סבב.
-  let currentAssignments = initialAssignments;
+  let currentAssignments = initialAssignments.map((assignment) => ({ ...assignment }));
+  let currentContext = buildContext(scheduleInputs, currentAssignments, options);
+  const initialDiagnosis = diagnoseSchedule(scheduleInputs, currentAssignments, currentContext);
   let currentDiagnosis = initialDiagnosis;
-
-  // stopReason מסביר בסוף למה האלגוריתם עצר.
-  let stopReason = maxIterations === 0 ? "max_iterations" : "no_improving_swap";
-
-  // המונים האלה מיועדים לסיכום בלבד, ולא משפיעים על בחירת המועמד.
   let candidatesChecked = 0;
   let validCandidatesCount = 0;
-  let rejectedRepeatedStateCandidatesCount = 0;
+  let iterationsRun = 0;
+  let stopReason = maxIterations === 0 ? "max_iterations" : "no_improving_candidate";
 
   for (let iteration = 1; iteration <= maxIterations; iteration += 1) {
-    // מייצרים רק מועמדי swap שמנסים לחזק משמרות חלשות.
-    const candidates = generateSwapCandidates(
-      scheduleInputs,
-      currentAssignments,
-      currentDiagnosis,
-      context
-    );
-
-    // כל מועמד עובר ולידציה, סימולציה, ואבחון לפני/אחרי.
+    // Generate both candidate types from the current schedule state.
+    const candidates = [
+      ...generateSwapCandidates(scheduleInputs, currentAssignments, currentDiagnosis, currentContext),
+      ...generateReplaceCandidates(scheduleInputs, currentAssignments, currentDiagnosis, currentContext),
+    ];
+    // Validate, simulate, and score each candidate before selecting one.
     const evaluations = candidates.map((candidate) =>
-      evaluateSwapCandidate(
-        candidate,
-        scheduleInputs,
-        currentAssignments,
-        currentDiagnosis,
-        context
-      )
+      evaluateCandidate(candidate, scheduleInputs, currentAssignments, currentDiagnosis, currentContext)
     );
+    const bestEvaluation = selectBestEvaluation(evaluations);
 
-    // בוחרים את ה-swap החוקי שנותן את שיפור הציון הגדול ביותר.
-    const selectionResult = selectBestSwapEvaluation(
-      evaluations,
-      currentDiagnosis,
-      visitedAssignmentStates
-    );
-    const bestEvaluation = selectionResult.bestEvaluation;
-
-    // מעדכנים מוני דיווח כדי להבין כמה אפשרויות נבדקו בכל הריצה.
     candidatesChecked += candidates.length;
-    validCandidatesCount += evaluations.filter(
-      (evaluation) => evaluation.validation.valid
-    ).length;
-    rejectedRepeatedStateCandidatesCount +=
-      selectionResult.repeatedStateCandidatesCount;
+    validCandidatesCount += evaluations.filter((evaluation) => evaluation.validation.valid).length;
 
-    // אם אין swap משפר, האלגוריתם סיים את העבודה.
     if (!bestEvaluation) {
-      stopReason = "no_improving_swap";
+      stopReason = "no_improving_candidate";
       break;
     }
 
-    // ה-evaluation כבר מכיל את הסידור והאבחון אחרי ה-swap שנבחר.
-    const nextAssignments = bestEvaluation.assignmentsAfter;
-    const nextDiagnosis = bestEvaluation.diagnosisAfter;
+    // Apply the best move, rebuild context, and continue from the improved schedule.
+    acceptedChanges.push(buildAcceptedChange(bestEvaluation, currentDiagnosis));
+    currentAssignments = bestEvaluation.assignmentsAfter;
+    currentContext = buildContext(scheduleInputs, currentAssignments, options);
+    currentDiagnosis = bestEvaluation.diagnosisAfter;
+    iterationsRun = iteration;
 
-    // שומרים את השינוי שהתקבל כדי שאפשר יהיה להסביר מה האלגוריתם עשה.
-    acceptedChanges.push(
-      buildAcceptedChange(bestEvaluation, currentDiagnosis, nextDiagnosis)
-    );
-
-    // Set update: full assignment signature -> schedule state already visited
-    // מוסיפים את המצב החדש כדי למנוע חזרה אליו באיטרציות הבאות.
-    visitedAssignmentStates.add(buildAssignmentStateSignature(nextAssignments));
-
-    // הסידור אחרי ה-swap הופך לנקודת הפתיחה של האיטרציה הבאה.
-    currentAssignments = nextAssignments;
-    currentDiagnosis = nextDiagnosis;
-
-    // אם הגענו למקסימום האיטרציות, זו סיבת העצירה.
     if (iteration === maxIterations) {
       stopReason = "max_iterations";
     }
   }
 
-  // בונים סיכום קצר של השיפור: ציונים לפני/אחרי, swaps שהתקבלו, ומוני בדיקה.
-  const improvementSummary = buildImprovementSummary(
-    initialDiagnosis,
-    currentDiagnosis,
-    options.enabled !== false,
-    acceptedChanges,
-    {
-      maxIterations,
-      stopReason,
-      candidatesChecked,
-      validCandidatesCount,
-      rejectedRepeatedStateCandidatesCount,
-    }
-  );
-
-  // מחזירים את הסידור הסופי, האבחון הסופי, וסיכום השיפור לשלב יצירת הסידור.
   return {
     assignments: currentAssignments,
     diagnosis: currentDiagnosis,
-    improvementSummary,
+    improvementSummary: buildImprovementSummary(
+      initialDiagnosis,
+      currentDiagnosis,
+      options.enabled !== false,
+      acceptedChanges,
+      { maxIterations, iterationsRun, stopReason, candidatesChecked, validCandidatesCount }
+    ),
   };
 }
 
-// ייצוא הפונקציות שהאלגוריתם הראשי או בדיקות יכולות להשתמש בהן.
+// Public exports used by the generator and by focused algorithm checks.
 module.exports = {
   SCORE_WEIGHTS,
   buildStrengthRange,
@@ -894,8 +666,9 @@ module.exports = {
   diagnoseSchedule,
   calculateScheduleScore,
   generateSwapCandidates,
-  validateSwapCandidate,
-  applySwapCandidate,
-  evaluateSwapCandidate,
+  generateReplaceCandidates,
+  validateCandidate,
+  applyCandidate,
+  evaluateCandidate,
   runScheduleImprovement,
 };
